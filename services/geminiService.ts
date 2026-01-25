@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScamAnalysis } from "../types";
 import { cacheService } from "./cacheService";
+import { getElevenLabsService, FILIPINO_VOICES } from "./elevenLabsService";
 
 const DB_NAME = 'GabayLigtasAudioDBV12'; // Incremented version for new voice speed
 const STORE_NAME = 'audio_cache';
@@ -229,20 +230,67 @@ export const speakSystem = (text: string) => {
   }
 };
 
-export const testVoices = () => {
+export const testVoices = async () => {
+  console.log('🎤 Testing TTS Services...');
+  
+  // Test ElevenLabs first
+  const elevenLabs = getElevenLabsService();
+  if (elevenLabs) {
+    console.log('🎤 ElevenLabs service available');
+    try {
+      const usage = await elevenLabs.getUsage();
+      if (usage) {
+        console.log('📊 ElevenLabs usage:', usage);
+      }
+      
+      const voices = await elevenLabs.getVoices();
+      console.log('🎤 ElevenLabs voices available:', voices.length);
+      
+      // Test ElevenLabs TTS
+      console.log('🎤 Testing ElevenLabs Filipino TTS...');
+      const testText = "Kumusta po kayo, Lolo at Lola. Ito po ay test ng ElevenLabs Filipino voice.";
+      
+      try {
+        const audioBuffer = await elevenLabs.generateSpeech(
+          testText,
+          FILIPINO_VOICES[1].voice_id, // Bella
+          { stability: 0.6, similarity_boost: 0.8 }
+        );
+        
+        // Play the audio
+        const ctx = getAudioContext();
+        const audioData = await ctx.decodeAudioData(audioBuffer);
+        const source = ctx.createBufferSource();
+        source.buffer = audioData;
+        source.connect(ctx.destination);
+        source.start(0);
+        
+        console.log('✅ ElevenLabs TTS test successful');
+        return; // Exit early if ElevenLabs works
+      } catch (error) {
+        console.error('❌ ElevenLabs TTS test failed:', error);
+      }
+    } catch (error) {
+      console.error('❌ ElevenLabs service error:', error);
+    }
+  } else {
+    console.log('⚠️ ElevenLabs service not available (API key missing)');
+  }
+  
+  // Fallback to browser speech synthesis testing
   if (!('speechSynthesis' in window)) {
     console.log('❌ Speech synthesis not supported');
     return;
   }
   
   const voices = window.speechSynthesis.getVoices();
-  console.log('🎤 Available voices:');
+  console.log('🎤 Browser voices available:');
   voices.forEach((voice, index) => {
     console.log(`${index + 1}. ${voice.name} (${voice.lang}) - ${voice.localService ? 'Local' : 'Remote'}`);
   });
   
   // Test Filipino voice
-  const testText = "Kumusta po kayo, Lolo at Lola. Ito po ay test ng Filipino voice.";
+  const testText = "Kumusta po kayo, Lolo at Lola. Ito po ay test ng browser Filipino voice.";
   const utterance = new SpeechSynthesisUtterance(testText);
   
   const tlVoice = voices.find(v => v.lang.includes('tl-PH')) ||
@@ -251,10 +299,10 @@ export const testVoices = () => {
                   voices.find(v => v.name.toLowerCase().includes('filipino'));
   
   if (tlVoice) {
-    console.log('🎤 Testing Filipino voice:', tlVoice.name);
+    console.log('🎤 Testing browser Filipino voice:', tlVoice.name);
     utterance.voice = tlVoice;
   } else {
-    console.log('⚠️ No Filipino voice found, testing with default');
+    console.log('⚠️ No browser Filipino voice found, testing with default');
   }
   
   utterance.lang = 'tl-PH';
@@ -274,7 +322,9 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 
   const cleanText = text.trim();
 
+  // Check cache first
   if (audioCache.has(cleanText)) {
+    console.log('🔊 Playing cached audio');
     const source = ctx.createBufferSource();
     source.buffer = audioCache.get(cleanText)!;
     source.connect(ctx.destination);
@@ -283,8 +333,10 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     return;
   }
 
+  // Check IndexedDB cache
   const storedBytes = await getAudioFromDB(cleanText);
   if (storedBytes) {
+    console.log('🔊 Playing stored audio from IndexedDB');
     const audioBuffer = await decodeAudioData(storedBytes, ctx);
     audioCache.set(cleanText, audioBuffer);
     if (myId !== currentSpeechId) return;
@@ -296,6 +348,51 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     return;
   }
 
+  // Try ElevenLabs TTS first
+  const elevenLabs = getElevenLabsService();
+  if (elevenLabs && navigator.onLine) {
+    try {
+      console.log('🎤 Attempting ElevenLabs TTS...');
+      
+      // Use a Filipino-optimized voice and add Filipino context
+      const filipinoText = `Mga Lolo at Lola, ${cleanText}`;
+      const audioBuffer = await elevenLabs.generateSpeech(
+        filipinoText,
+        FILIPINO_VOICES[1].voice_id, // Bella - warm female voice
+        {
+          stability: 0.6,        // Slightly more stable for seniors
+          similarity_boost: 0.8, // Higher similarity for clearer speech
+          style: 0.1,           // Slight style for more natural speech
+          use_speaker_boost: true
+        }
+      );
+
+      if (myId !== currentSpeechId) return;
+
+      // Convert ArrayBuffer to AudioBuffer
+      const audioData = await ctx.decodeAudioData(audioBuffer);
+      
+      // Cache the audio
+      const uint8Array = new Uint8Array(audioBuffer);
+      await saveAudioToDB(cleanText, uint8Array);
+      audioCache.set(cleanText, audioData);
+
+      // Play the audio
+      console.log('✅ ElevenLabs TTS successful, playing audio');
+      const source = ctx.createBufferSource();
+      source.buffer = audioData;
+      source.connect(ctx.destination);
+      activeSources.add(source);
+      source.start(0);
+      return;
+
+    } catch (error: any) {
+      console.error('❌ ElevenLabs TTS failed:', error.message);
+      // Continue to Gemini TTS fallback
+    }
+  }
+
+  // Fallback to Gemini TTS if ElevenLabs fails or is unavailable
   if (checkQuotaStatus()) {
     console.log('⚠️ TTS quota locked, using browser speech synthesis');
     speakSystem(cleanText);
@@ -309,7 +406,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
   }
 
   try {
-    console.log('🤖 Attempting Gemini TTS...');
+    console.log('🤖 Attempting Gemini TTS as fallback...');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
