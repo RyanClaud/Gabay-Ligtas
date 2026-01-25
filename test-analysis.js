@@ -21,6 +21,11 @@ const testMessages = [
   
   // PHILIPPINE SCAM PATTERNS (should be DANGEROUS)
   {
+    text: "Hi 9675715673, you can claim P3097.00 pesos to play games and win big prizes. Have fun playing! Exclusive Link: cutt.ly/OtxwVxlF?5673",
+    expected: "scam",
+    description: "Gaming/gambling scam with shortened link and prize claim"
+  },
+  {
     text: "09675715673 received PHP 200.00 from 09*****7653! New balance: PHP 1,200.00. Claim your bonus https://bit.ly/4jSRL6w",
     expected: "scam",
     description: "Fake money transfer scam with suspicious link"
@@ -65,10 +70,10 @@ const testMessages = [
 // Enhanced pattern-based analysis for testing Philippine cybercrime scams
 function enhancedAnalysis(text) {
   // Philippine-specific scam indicators
-  const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|click here|click this|i-click|pindutin/i.test(text);
+  const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|cutt\.ly|t\.co|short\.link|click here|click this|i-click|pindutin|exclusive link/i.test(text);
   const hasOTP = /otp|pin|mpin|password|passcode|verification code|verify|i-verify|mag-verify/i.test(text);
-  const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline|mabilis|agad|ngayon/i.test(text);
-  const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward|bonus|libreng|premyo/i.test(text);
+  const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline|mabilis|agad|ngayon|exclusive/i.test(text);
+  const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward|bonus|libreng|premyo|win big|play games|games/i.test(text);
   const hasBankTerms = /bank|account|suspended|verify|confirm|update|security|balance|received.*php|new balance|gcash|maya|paymaya|bpi|bdo|metrobank/i.test(text);
   const hasPhishing = /click|download|install|update|confirm|verify|login|sign in|mag-login|i-download|i-install/i.test(text);
   const hasFakeTransfer = /received.*php.*from.*new balance.*claim|natanggap.*piso.*mula|bagong balance/i.test(text.toLowerCase());
@@ -77,6 +82,7 @@ function enhancedAnalysis(text) {
   const hasImpersonation = /family|emergency|urgent help|tulong|pamilya|kapatid|anak|nanay|tatay/i.test(text);
   const hasSIMScam = /sim|registration|register|i-register|sim card|prepaid|postpaid/i.test(text);
   const hasIllegalSales = /selling.*sim|selling.*gcash|selling.*account|verified.*account|registered.*sim/i.test(text);
+  const hasGambling = /play games|gaming|casino|slots|poker|gambling|lotto|raffle|sweepstakes|have fun playing/i.test(text);
   
   // Check for legitimate telco patterns (these reduce scam score)
   const isLegitTelco = /welcome.*ka-tm|globe|smart.*prepaid|sim registration.*free|tm tambayan|official.*telco/i.test(text);
@@ -102,6 +108,11 @@ function enhancedAnalysis(text) {
   if (hasRomanceScam) riskScore += 0.3;
   if (hasImpersonation) riskScore += 0.3;
   if (hasIllegalSales) riskScore += 0.6; // High risk for illegal account/SIM sales
+  if (hasGambling) riskScore += 0.4; // High risk for gambling/gaming scams
+  
+  // High-risk combinations (very dangerous)
+  if (hasGambling && hasLink && hasPrize) riskScore += 0.6; // Gaming scam with link and prizes
+  if (hasLink && hasPrize && hasUrgency) riskScore += 0.4; // Urgent prize claims with links
   
   // Reduce score for legitimate patterns
   if (isLegitTelco) riskScore -= 0.4;
@@ -121,7 +132,7 @@ function enhancedAnalysis(text) {
     suspiciousIndicators: {
       hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing,
       hasFakeTransfer, hasInvestment, hasRomanceScam, hasImpersonation,
-      hasSIMScam, hasIllegalSales, isLegitTelco, isLegitBusiness
+      hasSIMScam, hasIllegalSales, hasGambling, isLegitTelco, isLegitBusiness
     }
   };
 }
