@@ -333,9 +333,17 @@ PHILIPPINE CYBERCRIME SCAM PATTERNS TO DETECT:
 
 CRITICAL SCAM INDICATORS:
 - Any message with shortened URLs (bit.ly, cutt.ly, t.co, etc.) + money offers = HIGH RISK
+- STANDALONE SUSPICIOUS LINKS = HIGH RISK (especially URL shorteners)
 - Gaming/gambling offers with links = HIGH RISK  
 - Prize claims with external links = HIGH RISK
 - Money offers from unknown sources = HIGH RISK
+- Isolated shortened URLs without context = VERY HIGH RISK
+
+SPECIAL RULES FOR STANDALONE LINKS:
+- If message is ONLY a shortened URL (bit.ly, cutt.ly, etc.) → isScam: true, confidence: 0.9+
+- If message is ONLY any suspicious link → isScam: true, confidence: 0.8+
+- Standalone links are inherently suspicious and dangerous
+- No legitimate business sends only a shortened URL without context
 
 LEGITIMATE MESSAGES (SAFE):
 - Official telco messages (TM, Globe, Smart) about SIM registration
@@ -429,16 +437,20 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
           throw new Error('Invalid response structure from Gemini API');
         }
         
-        // CRITICAL: Override Gemini if it's clearly wrong about gaming scams
+        // CRITICAL: Override Gemini if it's clearly wrong about gaming scams or standalone links
         const hasGamingScamPattern = /play games.*win.*prize.*link|claim.*pesos.*play.*games|gaming.*money.*link/i.test(text);
         const hasShortLink = /cutt\.ly|bit\.ly|t\.co|short\.link/i.test(text);
+        const isStandaloneShortLink = /^https?:\/\/(bit\.ly|cutt\.ly|t\.co|tinyurl\.com|short\.link|rb\.gy|is\.gd|v\.gd)\/[a-zA-Z0-9]+\??[a-zA-Z0-9]*$/i.test(text.trim());
         
-        if (hasGamingScamPattern && hasShortLink && !parsedResult.isScam) {
-          console.log('🚨 OVERRIDE: Gemini incorrectly marked gaming scam as safe - correcting!');
+        if ((hasGamingScamPattern && hasShortLink && !parsedResult.isScam) || 
+            (isStandaloneShortLink && !parsedResult.isScam)) {
+          console.log('🚨 OVERRIDE: Gemini incorrectly marked suspicious link/scam as safe - correcting!');
           return {
             isScam: true,
             confidence: 0.95,
-            reasonTagalog: "Lolo at Lola, ito po ay gaming scam! May suspicious link at nag-aalok ng pera para sa games. Delikado po ito.",
+            reasonTagalog: isStandaloneShortLink ? 
+              "Lolo at Lola, delikado po ang mga standalone na shortened links tulad nito! Walang legitimate na negosyo ang magpapadala lang ng link na walang explanation." :
+              "Lolo at Lola, ito po ay gaming scam! May suspicious link at nag-aalok ng pera para sa games. Delikado po ito.",
             actionTagalog: "Huwag po kayong mag-click sa link at i-delete na po natin ito agad!"
           };
         }
@@ -488,6 +500,11 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     const hasIllegalSales = /selling.*sim|selling.*gcash|selling.*account|verified.*account|registered.*sim/i.test(text);
     const hasGambling = /play games|gaming|casino|slots|poker|gambling|lotto|raffle|sweepstakes|have fun playing/i.test(text);
     
+    // CRITICAL: Detect standalone suspicious links
+    const isSuspiciousLink = /^https?:\/\/(bit\.ly|cutt\.ly|t\.co|tinyurl\.com|short\.link|rb\.gy|is\.gd|v\.gd)\/[a-zA-Z0-9]+\??[a-zA-Z0-9]*$/i.test(text.trim());
+    const isKnownScamLink = /bit\.ly\/4jSRL6w|cutt\.ly\/OtxwVxlF/i.test(text);
+    const isStandaloneLink = /^https?:\/\/[^\s]+$/.test(text.trim()) && text.trim().length < 100;
+    
     // Check for legitimate telco patterns (these reduce scam score)
     const isLegitTelco = /welcome.*ka-tm|globe|smart.*prepaid|sim registration.*free|tm tambayan|official.*telco/i.test(text);
     const isLegitBusiness = /receipt|invoice|order|delivery|shipping|resibo|order number/i.test(text);
@@ -495,11 +512,17 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     console.log('🔍 Fallback analysis indicators:', {
       hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing, 
       hasFakeTransfer, hasInvestment, hasRomanceScam, hasImpersonation, 
-      hasSIMScam, hasIllegalSales, hasGambling, isLegitTelco, isLegitBusiness
+      hasSIMScam, hasIllegalSales, hasGambling, isSuspiciousLink, isKnownScamLink, 
+      isStandaloneLink, isLegitTelco, isLegitBusiness
     });
     
     // More sophisticated Philippine scam scoring
     let riskScore = 0;
+    
+    // CRITICAL: Standalone suspicious links are HIGH RISK
+    if (isSuspiciousLink) riskScore += 0.8; // Very high risk for standalone URL shorteners
+    if (isKnownScamLink) riskScore += 1.0; // Maximum risk for known scam links
+    if (isStandaloneLink && hasLink) riskScore += 0.6; // High risk for any standalone link
     
     // High-risk indicators
     if (hasFakeTransfer) riskScore += 0.8; // Very high risk for fake transfer messages
@@ -540,7 +563,9 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     const result = isScam ? {
       isScam: true,
       confidence: confidence,
-      reasonTagalog: "Lolo at Lola, may mga nakikitang delikadong pattern po itong mensahe. Mukhang isa po ito sa mga kilalang scam sa Pilipinas tulad ng gaming scam, fake money offers, o phishing na may suspicious links.",
+      reasonTagalog: isSuspiciousLink || isStandaloneLink ? 
+        "Lolo at Lola, delikado po ang mga standalone na links lalo na ang mga shortened URLs! Walang legitimate na kumpanya ang magpapadala lang ng link na walang explanation o context." :
+        "Lolo at Lola, may mga nakikitang delikadong pattern po itong mensahe. Mukhang isa po ito sa mga kilalang scam sa Pilipinas tulad ng gaming scam, fake money offers, o phishing na may suspicious links.",
       actionTagalog: "Huwag po munang mag-reply, mag-click, o magbigay ng kahit anong personal na impormasyon. I-delete na po natin ito para safe tayo."
     } : {
       isScam: false,

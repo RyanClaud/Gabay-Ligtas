@@ -21,6 +21,16 @@ const testMessages = [
   
   // PHILIPPINE SCAM PATTERNS (should be DANGEROUS)
   {
+    text: "https://bit.ly/4jSRL6w",
+    expected: "scam",
+    description: "Standalone suspicious shortened link (known scam URL)"
+  },
+  {
+    text: "https://cutt.ly/OtxwVxlF?5673",
+    expected: "scam", 
+    description: "Standalone suspicious shortened link with parameters"
+  },
+  {
     text: "Hi 9675715673, you can claim P3097.00 pesos to play games and win big prizes. Have fun playing! Exclusive Link: cutt.ly/OtxwVxlF?5673",
     expected: "scam",
     description: "Gaming/gambling scam with shortened link and prize claim"
@@ -84,12 +94,22 @@ function enhancedAnalysis(text) {
   const hasIllegalSales = /selling.*sim|selling.*gcash|selling.*account|verified.*account|registered.*sim/i.test(text);
   const hasGambling = /play games|gaming|casino|slots|poker|gambling|lotto|raffle|sweepstakes|have fun playing/i.test(text);
   
+  // CRITICAL: Detect standalone suspicious links
+  const isSuspiciousLink = /^https?:\/\/(bit\.ly|cutt\.ly|t\.co|tinyurl\.com|short\.link|rb\.gy|is\.gd|v\.gd)\/[a-zA-Z0-9]+\??[a-zA-Z0-9]*$/i.test(text.trim());
+  const isKnownScamLink = /bit\.ly\/4jSRL6w|cutt\.ly\/OtxwVxlF/i.test(text);
+  const isStandaloneLink = /^https?:\/\/[^\s]+$/.test(text.trim()) && text.trim().length < 100;
+  
   // Check for legitimate telco patterns (these reduce scam score)
   const isLegitTelco = /welcome.*ka-tm|globe|smart.*prepaid|sim registration.*free|tm tambayan|official.*telco/i.test(text);
   const isLegitBusiness = /receipt|invoice|order|delivery|shipping|resibo|order number/i.test(text);
   
   // More sophisticated Philippine scam scoring
   let riskScore = 0;
+  
+  // CRITICAL: Standalone suspicious links are HIGH RISK
+  if (isSuspiciousLink) riskScore += 0.8; // Very high risk for standalone URL shorteners
+  if (isKnownScamLink) riskScore += 1.0; // Maximum risk for known scam links
+  if (isStandaloneLink && hasLink) riskScore += 0.6; // High risk for any standalone link
   
   // High-risk indicators
   if (hasFakeTransfer) riskScore += 0.8; // Very high risk for fake transfer messages
@@ -132,7 +152,8 @@ function enhancedAnalysis(text) {
     suspiciousIndicators: {
       hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing,
       hasFakeTransfer, hasInvestment, hasRomanceScam, hasImpersonation,
-      hasSIMScam, hasIllegalSales, hasGambling, isLegitTelco, isLegitBusiness
+      hasSIMScam, hasIllegalSales, hasGambling, isSuspiciousLink, isKnownScamLink,
+      isStandaloneLink, isLegitTelco, isLegitBusiness
     }
   };
 }
