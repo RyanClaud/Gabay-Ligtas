@@ -252,16 +252,23 @@ const Scanner: React.FC = () => {
               {/* Animated Background Elements for Scam */}
               {result.isScam && (
                 <>
-                  {/* Animated Hand Signal */}
-                  <div className="absolute top-4 right-4 w-16 h-16 sm:w-20 sm:h-20">
-                    <div className="animate-wave-hand text-4xl sm:text-5xl">
-                      ✋
+                  {/* Large Animated SCAM Text - Top Right */}
+                  <div className="absolute top-4 right-4 z-20">
+                    <div className="animate-scam-warning text-red-600 font-black text-2xl sm:text-3xl tracking-wider transform rotate-12 drop-shadow-lg">
+                      SCAM
                     </div>
                   </div>
                   
-                  {/* Heartbeat SCAM Text */}
-                  <div className="absolute top-4 left-4 opacity-20">
-                    <div className="animate-heartbeat text-red-600 font-black text-lg sm:text-xl tracking-wider">
+                  {/* Secondary SCAM Text - Bottom Left */}
+                  <div className="absolute bottom-4 left-4 opacity-30 z-10">
+                    <div className="animate-scam-pulse text-red-500 font-black text-lg sm:text-xl tracking-widest transform -rotate-6">
+                      SCAM
+                    </div>
+                  </div>
+                  
+                  {/* Third SCAM Text - Top Left with Different Animation */}
+                  <div className="absolute top-6 left-6 opacity-25 z-10">
+                    <div className="animate-scam-bounce text-red-400 font-black text-base sm:text-lg tracking-wider transform rotate-3">
                       SCAM
                     </div>
                   </div>
@@ -329,11 +336,55 @@ const Scanner: React.FC = () => {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        @keyframes wave-hand {
-          0%, 100% { transform: rotate(0deg) scale(1); }
-          25% { transform: rotate(-15deg) scale(1.1); }
-          50% { transform: rotate(15deg) scale(1.2); }
-          75% { transform: rotate(-10deg) scale(1.1); }
+        @keyframes scam-warning {
+          0%, 100% { 
+            transform: rotate(12deg) scale(1); 
+            opacity: 0.8;
+            text-shadow: 2px 2px 4px rgba(220, 38, 38, 0.3);
+          }
+          25% { 
+            transform: rotate(15deg) scale(1.1); 
+            opacity: 1;
+            text-shadow: 3px 3px 6px rgba(220, 38, 38, 0.5);
+          }
+          50% { 
+            transform: rotate(10deg) scale(1.2); 
+            opacity: 0.9;
+            text-shadow: 4px 4px 8px rgba(220, 38, 38, 0.6);
+          }
+          75% { 
+            transform: rotate(14deg) scale(1.05); 
+            opacity: 1;
+            text-shadow: 3px 3px 6px rgba(220, 38, 38, 0.4);
+          }
+        }
+        @keyframes scam-pulse {
+          0%, 100% { 
+            transform: rotate(-6deg) scale(0.8); 
+            opacity: 0.2;
+          }
+          50% { 
+            transform: rotate(-8deg) scale(1); 
+            opacity: 0.4;
+          }
+        }
+        @keyframes scam-bounce {
+          0%, 100% { 
+            transform: rotate(3deg) translateY(0) scale(0.9); 
+            opacity: 0.2;
+          }
+          25% { 
+            transform: rotate(5deg) translateY(-3px) scale(0.95); 
+            opacity: 0.3;
+          }
+          50% { 
+            transform: rotate(1deg) translateY(-6px) scale(1); 
+            opacity: 0.25;
+          }
+          75% { 
+            transform: rotate(4deg) translateY(-2px) scale(0.95); 
+            opacity: 0.3;
+          }
         }
         @keyframes heartbeat {
           0%, 100% { transform: scale(1); opacity: 0.3; }
@@ -370,8 +421,14 @@ const Scanner: React.FC = () => {
         .animate-spin-slow {
           animation: spin-slow 3s infinite linear;
         }
-        .animate-wave-hand {
-          animation: wave-hand 2s infinite ease-in-out;
+        .animate-scam-warning {
+          animation: scam-warning 2s infinite ease-in-out;
+        }
+        .animate-scam-pulse {
+          animation: scam-pulse 3s infinite ease-in-out;
+        }
+        .animate-scam-bounce {
+          animation: scam-bounce 2.5s infinite ease-in-out;
         }
         .animate-heartbeat {
           animation: heartbeat 1.5s infinite ease-in-out;
