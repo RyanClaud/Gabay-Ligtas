@@ -28,30 +28,76 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png" />
     
-    <!-- Styles - Conditional loading based on environment -->
-    <script>
-      // Only load Tailwind CDN in development
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        // Development mode - use CDN
-        const script = document.createElement('script');
-        script.src = 'https://cdn.tailwindcss.com';
-        document.head.appendChild(script);
-      } else {
-        // Production mode - use compiled CSS
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/tailwindcss@3.4.0/dist/tailwind.min.css';
-        document.head.appendChild(link);
-      }
-    </script>
+    <!-- Styles - Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <noscript>
+      <link rel="stylesheet" href="https://unpkg.com/tailwindcss@3.4.0/dist/tailwind.min.css">
+    </noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
+      
+      /* Critical CSS - Ensures basic styling even if Tailwind fails */
+      * {
+        box-sizing: border-box;
+      }
       
       body {
         font-family: 'Lexend', sans-serif;
         background-color: #f0f4f8;
         color: #1a202c;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+      }
+      
+      /* Fallback styles if Tailwind doesn't load */
+      .fallback-container {
+        min-height: 100vh;
+        background-color: #f1f5f9;
+        display: flex;
+        flex-direction: column;
+        max-width: 448px;
+        margin: 0 auto;
+        position: relative;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        overflow-x: hidden;
+        border-left: 1px solid #e5e7eb;
+        border-right: 1px solid #e5e7eb;
+      }
+      
+      .fallback-header {
+        background-color: #2563eb;
+        color: white;
+        padding: 2rem;
+        padding-top: 3rem;
+        border-radius: 0 0 3rem 3rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        z-index: 10;
+        border-bottom: 4px solid #1d4ed8;
+      }
+      
+      .fallback-main {
+        flex: 1;
+        padding: 1.5rem;
+        overflow-y: auto;
+        padding-top: 2.5rem;
+      }
+      
+      .fallback-nav {
+        position: sticky;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: white;
+        border-top: 4px solid #f3f4f6;
+        display: flex;
+        justify-content: space-around;
+        padding: 1.25rem;
+        padding-bottom: 2rem;
+        border-radius: 2.5rem 2.5rem 0 0;
+        box-shadow: 0 -15px 30px -5px rgba(0, 0, 0, 0.1);
+        z-index: 20;
       }
       
       /* Significantly larger text for elderly readability */
@@ -94,6 +140,10 @@
           font-size: 1.5rem;
           line-height: 2rem;
         }
+        
+        .fallback-container {
+          max-width: 512px;
+        }
       }
 
       @media (min-width: 768px) {
@@ -105,6 +155,16 @@
         .elder-text-small {
           font-size: 1.5rem;
           line-height: 2rem;
+        }
+        
+        .fallback-container {
+          max-width: 576px;
+        }
+      }
+
+      @media (min-width: 1024px) {
+        .fallback-container {
+          max-width: 672px;
         }
       }
 
@@ -158,6 +218,32 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
   }
 }
+</script>
+
+<!-- Tailwind CSS Detection and Fallback -->
+<script>
+  // Check if Tailwind CSS loaded properly
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      // Test if Tailwind classes are working
+      const testElement = document.createElement('div');
+      testElement.className = 'bg-blue-500 text-white p-4 hidden';
+      document.body.appendChild(testElement);
+      
+      const computedStyle = window.getComputedStyle(testElement);
+      const hasBlueBackground = computedStyle.backgroundColor === 'rgb(59, 130, 246)';
+      
+      document.body.removeChild(testElement);
+      
+      if (!hasBlueBackground) {
+        console.warn('⚠️ Tailwind CSS may not have loaded properly');
+        // Add fallback classes to body
+        document.body.classList.add('tailwind-fallback');
+      } else {
+        console.log('✅ Tailwind CSS loaded successfully');
+      }
+    }, 1000);
+  });
 </script>
 </head>
   <body>
