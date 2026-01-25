@@ -107,28 +107,25 @@ const Scanner: React.FC = () => {
     setResult(null);
     stopVoice();
     
-    // Clear any cached results for this session
-    if (inputText.trim()) {
-      // Clear from both cache layers
-      const textHash = inputText.split('').reduce((hash, char) => {
-        return ((hash << 5) - hash) + char.charCodeAt(0);
-      }, 0).toString(36);
+    // Clear ALL cached results aggressively
+    try {
+      // Clear localStorage completely for this domain
+      localStorage.clear();
       
-      // Clear from localStorage if accessible
-      try {
-        const keys = Object.keys(localStorage);
-        keys.forEach(key => {
-          if (key.includes('scan_') || key.includes('gemini_analysis_')) {
-            localStorage.removeItem(key);
-          }
-        });
-        console.log('🧹 Cleared analysis cache');
-      } catch (error) {
-        console.warn('Could not clear cache:', error);
+      // Clear sessionStorage as well
+      sessionStorage.clear();
+      
+      // Clear IndexedDB cache if accessible
+      if ('indexedDB' in window) {
+        indexedDB.deleteDatabase('GabayLigtasAudioDBV12');
       }
+      
+      console.log('🧹 Cleared ALL cache data');
+    } catch (error) {
+      console.warn('Could not clear all cache:', error);
     }
     
-    playVoiceWarning("Binura na po natin ang detalye. Handa na po muli ang inyong checker.");
+    playVoiceWarning("Binura na po natin ang lahat ng cache. Handa na po muli ang inyong checker.");
   };
 
   return (

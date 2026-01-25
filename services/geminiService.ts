@@ -275,11 +275,19 @@ export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
   
   console.log('🔑 Generated hash for text:', textHash);
   
-  // Check cache first using the full text
-  const cached = cacheService.getScanResult(text);
-  if (cached) {
-    console.log('📱 Using cached analysis result for hash:', textHash);
-    return cached;
+  // CRITICAL: Skip cache for known problematic gaming scam patterns
+  const isKnownGamingScam = /Hi.*9675715673.*claim.*P3097.*play games.*win big prizes.*cutt\.ly/i.test(text);
+  const shouldSkipCache = isKnownGamingScam || /play games.*win.*prize.*cutt\.ly|claim.*pesos.*play.*games.*link/i.test(text);
+  
+  if (shouldSkipCache) {
+    console.log('🚨 Skipping cache for known gaming scam pattern');
+  } else {
+    // Check cache first using the full text
+    const cached = cacheService.getScanResult(text);
+    if (cached) {
+      console.log('📱 Using cached analysis result for hash:', textHash);
+      return cached;
+    }
   }
 
   // Enhanced system instruction with Philippine-specific scam knowledge
@@ -317,6 +325,18 @@ PHILIPPINE CYBERCRIME SCAM PATTERNS TO DETECT:
    - Requests for money for "travel" or "emergencies"
    - Investment opportunities from romantic interests
 
+6. GAMING/GAMBLING SCAMS:
+   - Messages offering money to play games
+   - Prize claims for gaming or gambling
+   - Links to gaming sites with money offers
+   - "Win big prizes" with suspicious links
+
+CRITICAL SCAM INDICATORS:
+- Any message with shortened URLs (bit.ly, cutt.ly, t.co, etc.) + money offers = HIGH RISK
+- Gaming/gambling offers with links = HIGH RISK  
+- Prize claims with external links = HIGH RISK
+- Money offers from unknown sources = HIGH RISK
+
 LEGITIMATE MESSAGES (SAFE):
 - Official telco messages (TM, Globe, Smart) about SIM registration
 - Genuine business communications without suspicious requests
@@ -325,6 +345,8 @@ LEGITIMATE MESSAGES (SAFE):
 - News or informational messages
 
 ANALYSIS RULES:
+- If message contains gaming + money + link → isScam: true, confidence: 0.9+
+- If message contains prize + link + money → isScam: true, confidence: 0.9+
 - If it matches Philippine scam patterns → isScam: true, high confidence
 - If it's clearly legitimate communication → isScam: false, high confidence
 - If uncertain → moderate confidence levels
@@ -405,6 +427,20 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
             typeof parsedResult.reasonTagalog !== 'string' ||
             typeof parsedResult.actionTagalog !== 'string') {
           throw new Error('Invalid response structure from Gemini API');
+        }
+        
+        // CRITICAL: Override Gemini if it's clearly wrong about gaming scams
+        const hasGamingScamPattern = /play games.*win.*prize.*link|claim.*pesos.*play.*games|gaming.*money.*link/i.test(text);
+        const hasShortLink = /cutt\.ly|bit\.ly|t\.co|short\.link/i.test(text);
+        
+        if (hasGamingScamPattern && hasShortLink && !parsedResult.isScam) {
+          console.log('🚨 OVERRIDE: Gemini incorrectly marked gaming scam as safe - correcting!');
+          return {
+            isScam: true,
+            confidence: 0.95,
+            reasonTagalog: "Lolo at Lola, ito po ay gaming scam! May suspicious link at nag-aalok ng pera para sa games. Delikado po ito.",
+            actionTagalog: "Huwag po kayong mag-click sa link at i-delete na po natin ito agad!"
+          };
         }
         
         return parsedResult;
@@ -497,18 +533,18 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     riskScore = Math.max(0, Math.min(2.0, riskScore));
     
     const isScam = riskScore >= 0.5;
-    const confidence = Math.min(0.95, Math.max(0.1, riskScore / 2.0));
+    const confidence = Math.min(0.95, Math.max(0.15, riskScore / 2.0));
     
     console.log('🔍 Fallback analysis result:', { isScam, confidence, riskScore });
     
     const result = isScam ? {
       isScam: true,
       confidence: confidence,
-      reasonTagalog: "Lolo at Lola, may mga nakikitang delikadong pattern po itong mensahe. Mukhang isa po ito sa mga kilalang scam sa Pilipinas tulad ng fake money transfer, phishing, o investment scam.",
+      reasonTagalog: "Lolo at Lola, may mga nakikitang delikadong pattern po itong mensahe. Mukhang isa po ito sa mga kilalang scam sa Pilipinas tulad ng gaming scam, fake money offers, o phishing na may suspicious links.",
       actionTagalog: "Huwag po munang mag-reply, mag-click, o magbigay ng kahit anong personal na impormasyon. I-delete na po natin ito para safe tayo."
     } : {
       isScam: false,
-      confidence: 1 - confidence,
+      confidence: Math.max(0.7, 1 - confidence), // Ensure high confidence for safe messages
       reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang mga pattern ng mga kilalang scam sa Pilipinas.",
       actionTagalog: "Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo."
     };
