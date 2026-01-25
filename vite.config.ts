@@ -40,6 +40,18 @@ export default defineConfig(({ mode }) => {
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable any'
+              },
+              {
+                src: '/icons/icon-384x384.png',
+                sizes: '384x384',
+                type: 'image/png',
+                purpose: 'any'
+              },
+              {
+                src: '/icons/icon-144x144.png',
+                sizes: '144x144',
+                type: 'image/png',
+                purpose: 'any'
               }
             ]
           },
