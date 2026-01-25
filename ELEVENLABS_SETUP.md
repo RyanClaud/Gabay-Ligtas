@@ -12,7 +12,7 @@
 1. Open your `.env.local` file
 2. Add your ElevenLabs API key:
 ```env
-ELEVENLABS_API_KEY=your_actual_api_key_here
+VITE_ELEVENLABS_API_KEY=your_actual_api_key_here
 ```
 
 ### Step 3: Choose Filipino Voices
@@ -132,7 +132,7 @@ For best Filipino TTS quality:
 ## 🚀 Production Deployment
 
 For production (Vercel, Netlify, etc.):
-1. Add `ELEVENLABS_API_KEY` to your deployment environment variables
+1. Add `VITE_ELEVENLABS_API_KEY` to your deployment environment variables
 2. The app will automatically use ElevenLabs when available
 3. Falls back gracefully if API key is missing
 

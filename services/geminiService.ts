@@ -230,91 +230,6 @@ export const speakSystem = (text: string) => {
   }
 };
 
-export const testVoices = async () => {
-  console.log('🎤 Testing TTS Services...');
-  
-  // Test ElevenLabs first
-  const elevenLabs = getElevenLabsService();
-  if (elevenLabs) {
-    console.log('🎤 ElevenLabs service available');
-    try {
-      const usage = await elevenLabs.getUsage();
-      if (usage) {
-        console.log('📊 ElevenLabs usage:', usage);
-      }
-      
-      const voices = await elevenLabs.getVoices();
-      console.log('🎤 ElevenLabs voices available:', voices.length);
-      
-      // Test ElevenLabs TTS
-      console.log('🎤 Testing ElevenLabs Filipino TTS...');
-      const testText = "Kumusta po kayo, Lolo at Lola. Ito po ay test ng ElevenLabs Filipino voice.";
-      
-      try {
-        const audioBuffer = await elevenLabs.generateSpeech(
-          testText,
-          FILIPINO_VOICES[1].voice_id, // Bella
-          { stability: 0.6, similarity_boost: 0.8 }
-        );
-        
-        // Play the audio
-        const ctx = getAudioContext();
-        const audioData = await ctx.decodeAudioData(audioBuffer);
-        const source = ctx.createBufferSource();
-        source.buffer = audioData;
-        source.connect(ctx.destination);
-        source.start(0);
-        
-        console.log('✅ ElevenLabs TTS test successful');
-        return; // Exit early if ElevenLabs works
-      } catch (error) {
-        console.error('❌ ElevenLabs TTS test failed:', error);
-      }
-    } catch (error) {
-      console.error('❌ ElevenLabs service error:', error);
-    }
-  } else {
-    console.log('⚠️ ElevenLabs service not available (API key missing)');
-  }
-  
-  // Fallback to browser speech synthesis testing
-  if (!('speechSynthesis' in window)) {
-    console.log('❌ Speech synthesis not supported');
-    return;
-  }
-  
-  const voices = window.speechSynthesis.getVoices();
-  console.log('🎤 Browser voices available:');
-  voices.forEach((voice, index) => {
-    console.log(`${index + 1}. ${voice.name} (${voice.lang}) - ${voice.localService ? 'Local' : 'Remote'}`);
-  });
-  
-  // Test Filipino voice
-  const testText = "Kumusta po kayo, Lolo at Lola. Ito po ay test ng browser Filipino voice.";
-  const utterance = new SpeechSynthesisUtterance(testText);
-  
-  const tlVoice = voices.find(v => v.lang.includes('tl-PH')) ||
-                  voices.find(v => v.lang.includes('tl')) ||
-                  voices.find(v => v.lang.includes('fil')) ||
-                  voices.find(v => v.name.toLowerCase().includes('filipino'));
-  
-  if (tlVoice) {
-    console.log('🎤 Testing browser Filipino voice:', tlVoice.name);
-    utterance.voice = tlVoice;
-  } else {
-    console.log('⚠️ No browser Filipino voice found, testing with default');
-  }
-  
-  utterance.lang = 'tl-PH';
-  utterance.rate = 0.75;
-  window.speechSynthesis.speak(utterance);
-};
-
-// Add to window for debugging
-if (typeof window !== 'undefined') {
-  (window as any).testVoices = testVoices;
-}
-
 export const playVoiceWarning = async (text: string): Promise<void> => {
   const myId = ++currentSpeechId;
   const ctx = getAudioContext();
@@ -369,10 +284,19 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 
       if (myId !== currentSpeechId) return;
 
-      // Convert ArrayBuffer to AudioBuffer
-      const audioData = await ctx.decodeAudioData(audioBuffer);
+      // Create a copy of the ArrayBuffer before using it
+      const audioBufferCopy = audioBuffer.slice(0);
       
-      // Cache the audio
+      // Convert ArrayBuffer to AudioBuffer with error handling
+      let audioData: AudioBuffer;
+      try {
+        audioData = await ctx.decodeAudioData(audioBufferCopy);
+      } catch (decodeError) {
+        console.error('❌ Failed to decode ElevenLabs audio data:', decodeError);
+        throw new Error('Audio decoding failed');
+      }
+      
+      // Cache the audio using original buffer
       const uint8Array = new Uint8Array(audioBuffer);
       await saveAudioToDB(cleanText, uint8Array);
       audioCache.set(cleanText, audioData);
@@ -407,7 +331,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 
   try {
     console.log('🤖 Attempting Gemini TTS as fallback...');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ 
@@ -560,7 +484,7 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     const result = await cacheService.cacheApiCall(
       `gemini_analysis_${textHash}`,
       async () => {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+        const apiKey = process.env.GEMINI_API_KEY;
         
         if (!apiKey) {
           throw new Error('API key not found. Please check your environment variables.');
@@ -656,7 +580,7 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
-      apiKey: process.env.API_KEY ? 'Present' : 'Missing',
+      apiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing',
       geminiApiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing'
     });
     
