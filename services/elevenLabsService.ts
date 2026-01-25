@@ -147,20 +147,27 @@ export const getElevenLabsService = (): ElevenLabsService | null => {
   const apiKey2 = process.env.VITE_ELEVENLABS_API_KEY;
   const apiKey3 = process.env.ELEVENLABS_API_KEY;
   
-  console.log('🔍 ElevenLabs API Key Debug:');
-  console.log('  import.meta.env.VITE_ELEVENLABS_API_KEY:', apiKey1 ? `Present (${apiKey1.length} chars) - ${apiKey1.substring(0, 8)}...` : 'Missing/Empty');
-  console.log('  process.env.VITE_ELEVENLABS_API_KEY:', apiKey2 ? `Present (${apiKey2.length} chars) - ${apiKey2.substring(0, 8)}...` : 'Missing/Empty');
-  console.log('  process.env.ELEVENLABS_API_KEY:', apiKey3 ? `Present (${apiKey3.length} chars) - ${apiKey3.substring(0, 8)}...` : 'Missing/Empty');
+  // Only show detailed debug in development
+  if (import.meta.env.DEV) {
+    console.log('🔍 ElevenLabs API Key Debug:');
+    console.log('  import.meta.env.VITE_ELEVENLABS_API_KEY:', apiKey1 ? `Present (${apiKey1.length} chars) - ${apiKey1.substring(0, 8)}...` : 'Missing/Empty');
+    console.log('  process.env.VITE_ELEVENLABS_API_KEY:', apiKey2 ? `Present (${apiKey2.length} chars) - ${apiKey2.substring(0, 8)}...` : 'Missing/Empty');
+    console.log('  process.env.ELEVENLABS_API_KEY:', apiKey3 ? `Present (${apiKey3.length} chars) - ${apiKey3.substring(0, 8)}...` : 'Missing/Empty');
+  }
   
   const apiKey = apiKey1 || apiKey2 || apiKey3;
   
   if (!apiKey || apiKey.trim() === '' || apiKey === 'undefined' || apiKey === 'your_elevenlabs_api_key_here') {
-    console.warn('⚠️ ElevenLabs API key not found, empty, or is placeholder. Checked: VITE_ELEVENLABS_API_KEY, ELEVENLABS_API_KEY');
-    console.warn('⚠️ API key value:', apiKey ? `"${apiKey.substring(0, 10)}..." (${apiKey.length} chars)` : 'null/undefined');
+    if (import.meta.env.DEV) {
+      console.warn('⚠️ ElevenLabs API key not found, empty, or is placeholder. Checked: VITE_ELEVENLABS_API_KEY, ELEVENLABS_API_KEY');
+      console.warn('⚠️ API key value:', apiKey ? `"${apiKey.substring(0, 10)}..." (${apiKey.length} chars)` : 'null/undefined');
+    }
     return null;
   }
 
-  console.log('✅ ElevenLabs API key found, initializing service');
+  if (import.meta.env.DEV) {
+    console.log('✅ ElevenLabs API key found, initializing service');
+  }
   
   if (!elevenLabsService) {
     elevenLabsService = new ElevenLabsService(apiKey);

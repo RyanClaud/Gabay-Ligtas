@@ -2,6 +2,11 @@ import React from 'react';
 
 // Debug component to check environment variables in production
 export const EnvDebug: React.FC = () => {
+  // Only show in development mode
+  if (import.meta.env.PROD) {
+    return null;
+  }
+
   const envVars = {
     'import.meta.env.VITE_ELEVENLABS_API_KEY': import.meta.env.VITE_ELEVENLABS_API_KEY ? 
       `Present (${import.meta.env.VITE_ELEVENLABS_API_KEY.length} chars) - ${import.meta.env.VITE_ELEVENLABS_API_KEY.substring(0, 8)}...` : 
