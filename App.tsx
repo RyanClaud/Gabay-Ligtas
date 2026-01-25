@@ -43,7 +43,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col w-full max-w-md mx-auto relative shadow-2xl overflow-x-hidden border-x border-gray-200 sm:max-w-lg md:max-w-xl lg:max-w-2xl">
+    <div className="h-screen bg-slate-50 flex flex-col w-full max-w-md mx-auto relative shadow-2xl overflow-hidden border-x border-gray-200 sm:max-w-lg md:max-w-xl lg:max-w-2xl">
       {/* PWA Components */}
       <PWAUpdateNotification />
       <PWAStatus />
@@ -53,53 +53,53 @@ const App: React.FC = () => {
       {/* Splash Screen Overlay */}
       {showSplash && <SplashScreen />}
 
-      {/* Header - Bigger and bolder */}
-      <header className="bg-blue-600 text-white p-6 sm:p-8 pt-8 sm:pt-12 rounded-b-[2rem] sm:rounded-b-[3rem] shadow-2xl z-10 border-b-4 border-blue-700">
+      {/* Header - Fixed height */}
+      <header className="bg-blue-600 text-white p-4 sm:p-6 pt-6 sm:pt-8 rounded-b-[2rem] sm:rounded-b-[3rem] shadow-2xl z-10 border-b-4 border-blue-700 flex-shrink-0">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tighter uppercase">Gabay Ligtas</h1>
-            <p className="text-blue-100 text-base sm:text-xl font-bold mt-1">Katuwang ng Lolo at Lola</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tighter uppercase">Gabay Ligtas</h1>
+            <p className="text-blue-100 text-sm sm:text-base md:text-lg font-bold mt-1">Katuwang ng Lolo at Lola</p>
           </div>
-          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-500/40 rounded-2xl sm:rounded-3xl flex items-center justify-center backdrop-blur-xl border-2 border-white/20 shadow-inner">
-            <i className="fa-solid fa-user-shield text-2xl sm:text-3xl md:text-4xl text-white"></i>
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-500/40 rounded-xl sm:rounded-2xl flex items-center justify-center backdrop-blur-xl border-2 border-white/20 shadow-inner">
+            <i className="fa-solid fa-user-shield text-lg sm:text-2xl md:text-3xl text-white"></i>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 p-4 sm:p-6 overflow-y-auto pt-6 sm:pt-10">
+      {/* Main Content Area - Scrollable with fixed height */}
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 pt-4 sm:pt-6 min-h-0">
         {!showSplash && renderContent()}
       </main>
 
-      {/* Persistent Navigation Bar - Larger touch targets */}
-      <nav className="sticky bottom-0 left-0 right-0 bg-white border-t-4 border-gray-100 flex justify-around p-3 sm:p-5 pb-4 sm:pb-8 rounded-t-[2rem] sm:rounded-t-[2.5rem] shadow-[0_-15px_30px_-5px_rgba(0,0,0,0.1)] z-20">
+      {/* Persistent Navigation Bar - Fixed at bottom */}
+      <nav className="bg-white border-t-4 border-gray-100 flex justify-around p-2 sm:p-3 pb-3 sm:pb-4 rounded-t-[1.5rem] sm:rounded-t-[2rem] shadow-[0_-15px_30px_-5px_rgba(0,0,0,0.1)] z-20 flex-shrink-0">
         <button
           onClick={() => handleTabSwitch(AppTab.SCANNER)}
-          className={`flex flex-col items-center gap-1 sm:gap-2 flex-1 py-3 sm:py-4 rounded-2xl sm:rounded-3xl transition-all ${
+          className={`flex flex-col items-center gap-1 flex-1 py-2 sm:py-3 px-2 rounded-xl sm:rounded-2xl transition-all ${
             activeTab === AppTab.SCANNER ? 'text-blue-700 bg-blue-50 scale-105 shadow-md' : 'text-gray-400'
           }`}
         >
-          <i className="fa-solid fa-shield-virus text-2xl sm:text-3xl"></i>
+          <i className="fa-solid fa-shield-virus text-xl sm:text-2xl"></i>
           <span className="text-xs sm:text-sm font-black uppercase tracking-tighter">Checker</span>
         </button>
         
         <button
           onClick={() => handleTabSwitch(AppTab.LEARN)}
-          className={`flex flex-col items-center gap-1 sm:gap-2 flex-1 py-3 sm:py-4 rounded-2xl sm:rounded-3xl transition-all ${
+          className={`flex flex-col items-center gap-1 flex-1 py-2 sm:py-3 px-2 rounded-xl sm:rounded-2xl transition-all ${
             activeTab === AppTab.LEARN ? 'text-blue-700 bg-blue-50 scale-105 shadow-md' : 'text-gray-400'
           }`}
         >
-          <i className="fa-solid fa-graduation-cap text-2xl sm:text-3xl"></i>
+          <i className="fa-solid fa-graduation-cap text-xl sm:text-2xl"></i>
           <span className="text-xs sm:text-sm font-black uppercase tracking-tighter">Kaalaman</span>
         </button>
         
         <button
           onClick={() => handleTabSwitch(AppTab.HELP)}
-          className={`flex flex-col items-center gap-1 sm:gap-2 flex-1 py-3 sm:py-4 rounded-2xl sm:rounded-3xl transition-all ${
+          className={`flex flex-col items-center gap-1 flex-1 py-2 sm:py-3 px-2 rounded-xl sm:rounded-2xl transition-all ${
             activeTab === AppTab.HELP ? 'text-red-700 bg-red-50 font-black scale-105 shadow-md' : 'text-gray-400'
           }`}
         >
-          <i className="fa-solid fa-life-ring text-2xl sm:text-3xl"></i>
+          <i className="fa-solid fa-life-ring text-xl sm:text-2xl"></i>
           <span className="text-xs sm:text-sm font-black uppercase tracking-tighter">Tulong</span>
         </button>
       </nav>

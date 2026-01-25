@@ -282,38 +282,58 @@ export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
     return cached;
   }
 
-  // Enhanced system instruction with better analysis guidelines
+  // Enhanced system instruction with Philippine-specific scam knowledge
   const systemInstruction = `You are "Apo", a caring, respectful, and expert Cyber-Guardian for Filipino Senior Citizens. 
 Your goal is to analyze messages accurately and explain risks in natural, conversational Tagalog.
 
-ANALYSIS GUIDELINES:
-1. CAREFULLY analyze the actual content of the message
-2. Look for REAL scam indicators:
-   - Unsolicited links or suspicious URLs (especially shortened links like bit.ly)
-   - Requests for OTP, PIN, MPIN, passwords, or personal info
-   - False urgency ("Act now!", "Limited time!")
-   - Too-good-to-be-true offers (huge prizes, free money)
-   - Fake money transfer notifications with suspicious links
-   - Impersonation of banks, government, or companies
-   - Poor grammar or suspicious sender information
+PHILIPPINE CYBERCRIME SCAM PATTERNS TO DETECT:
 
-3. LEGITIMATE messages are SAFE:
-   - Official telco messages (TM, Globe, Smart) about SIM registration
-   - Normal conversations between friends/family
-   - Genuine business communications
-   - Educational content
-   - News or informational messages
-   - Personal messages without suspicious elements
+1. PHISHING & SPOOFING:
+   - Fake bank/government SMS with suspicious links
+   - Requests for OTP, PIN, MPIN, passwords
+   - Messages claiming account suspension/verification needed
+   - Vishing attempts asking to "update" account details
 
-4. Be ACCURATE in your assessment:
-   - If it's clearly safe, mark isScam: false with appropriate confidence
-   - If it's clearly dangerous, mark isScam: true with high confidence
-   - If uncertain, use moderate confidence levels
+2. CONSUMER FRAUD:
+   - Fake online stores on social media
+   - Too-good-to-be-true product offers
+   - Requests for GCash/Maya payments upfront
+   - Non-delivery scams
+
+3. INVESTMENT SCAMS:
+   - Cryptocurrency investment offers
+   - High-return investment promises
+   - Advance fee scams (pay fees to claim prizes)
+   - "Limited time" investment opportunities
+
+4. IDENTITY THEFT:
+   - Family/friend impersonation claiming emergencies
+   - Requests for urgent money transfers
+   - Deepfake or account takeover attempts
+   - Illegal SIM/e-wallet account offers
+
+5. ROMANCE SCAMS:
+   - Long-term relationship building
+   - Requests for money for "travel" or "emergencies"
+   - Investment opportunities from romantic interests
+
+LEGITIMATE MESSAGES (SAFE):
+- Official telco messages (TM, Globe, Smart) about SIM registration
+- Genuine business communications without suspicious requests
+- Normal family/friend conversations
+- Educational content without links or money requests
+- News or informational messages
+
+ANALYSIS RULES:
+- If it matches Philippine scam patterns → isScam: true, high confidence
+- If it's clearly legitimate communication → isScam: false, high confidence
+- If uncertain → moderate confidence levels
+- Consider context: sender, content, requests made
 
 RESPONSE RULES:
 - Use "po" and "opo" for respect
-- ReasonTagalog: Explain WHY it's safe or dangerous based on actual content
-- ActionTagalog: Give appropriate advice (delete if scam, or "okay lang po" if safe)
+- ReasonTagalog: Explain WHY it's safe/dangerous based on Philippine scam patterns
+- ActionTagalog: Give specific advice (delete if scam, "okay lang po" if safe)
 - Be conversational like a caring grandchild
 
 RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTagalog (string), actionTagalog (string)`;
@@ -338,13 +358,13 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
         console.log('📤 Sending request to Gemini...');
         
         const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash", // Using stable model name
+          model: "gemini-2.5-flash", // Using current stable model name
           contents: [{
             parts: [{
               text: `Please analyze this message for scam indicators: "${text}"`
             }]
           }],
-          generationConfig: {
+          config: {
             temperature: 0.1, // Low temperature for consistent analysis
             topK: 1,
             topP: 0.8,
@@ -360,15 +380,16 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
               },
               required: ["isScam", "confidence", "reasonTagalog", "actionTagalog"],
             },
-          },
-          systemInstruction: {
-            parts: [{ text: systemInstruction }]
+            systemInstruction: {
+              parts: [{ text: systemInstruction }]
+            }
           }
         });
         
         console.log('📥 Received response from Gemini');
         
-        const responseText = response.response.text();
+        // Use the correct response structure for the new Google GenAI library
+        const responseText = response.text;
         console.log('📄 Raw response:', responseText);
         
         if (!responseText) {
@@ -413,50 +434,76 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
       return fallbackCache;
     }
 
-    // Provide a more nuanced default response based on simple text analysis
+    // Enhanced Philippine-specific scam pattern detection
     console.log('🔍 Performing fallback analysis...');
-    const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|click here|click this/i.test(text);
-    const hasOTP = /otp|pin|mpin|password|passcode|verification code|verify/i.test(text);
-    const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline/i.test(text);
-    const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward|bonus/i.test(text);
-    const hasBankTerms = /bank|account|suspended|verify|confirm|update|security|balance|received.*php|new balance/i.test(text);
-    const hasPhishing = /click|download|install|update|confirm|verify|login|sign in/i.test(text);
-    const hasFakeTransfer = /received.*php.*from.*new balance.*claim/i.test(text.toLowerCase());
+    
+    // Philippine-specific scam indicators
+    const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|click here|click this|i-click|pindutin/i.test(text);
+    const hasOTP = /otp|pin|mpin|password|passcode|verification code|verify|i-verify|mag-verify/i.test(text);
+    const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline|mabilis|agad|ngayon/i.test(text);
+    const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward|bonus|libreng|premyo/i.test(text);
+    const hasBankTerms = /bank|account|suspended|verify|confirm|update|security|balance|received.*php|new balance|gcash|maya|paymaya|bpi|bdo|metrobank/i.test(text);
+    const hasPhishing = /click|download|install|update|confirm|verify|login|sign in|mag-login|i-download|i-install/i.test(text);
+    const hasFakeTransfer = /received.*php.*from.*new balance.*claim|natanggap.*piso.*mula|bagong balance/i.test(text.toLowerCase());
+    const hasInvestment = /investment|invest|crypto|bitcoin|trading|high return|guaranteed|profit|kita|tubo|negosyo|pera/i.test(text);
+    const hasRomanceScam = /emergency|travel|hospital|accident|help me|tulong|emergency|aksidente|ospital/i.test(text);
+    const hasImpersonation = /family|emergency|urgent help|tulong|pamilya|kapatid|anak|nanay|tatay/i.test(text);
+    const hasSIMScam = /sim|registration|register|i-register|sim card|prepaid|postpaid/i.test(text);
+  const hasIllegalSales = /selling.*sim|selling.*gcash|selling.*account|verified.*account|registered.*sim/i.test(text);
+    
+    // Check for legitimate telco patterns (these reduce scam score)
+    const isLegitTelco = /welcome.*ka-tm|globe|smart.*prepaid|sim registration.*free|tm tambayan|official.*telco/i.test(text);
+    const isLegitBusiness = /receipt|invoice|order|delivery|shipping|resibo|order number/i.test(text);
     
     console.log('🔍 Fallback analysis indicators:', {
-      hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing, hasFakeTransfer
+      hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing, 
+      hasFakeTransfer, hasInvestment, hasRomanceScam, hasImpersonation, 
+      hasSIMScam, hasIllegalSales, isLegitTelco, isLegitBusiness
     });
     
-    // More sophisticated scoring
+    // More sophisticated Philippine scam scoring
     let riskScore = 0;
+    
+    // High-risk indicators
+    if (hasFakeTransfer) riskScore += 0.8; // Very high risk for fake transfer messages
+    if (hasOTP && hasBankTerms) riskScore += 0.7; // Banking phishing
+    if (hasInvestment && hasUrgency) riskScore += 0.6; // Investment scams
+    if (hasLink && hasUrgency) riskScore += 0.5; // Urgent phishing
+    if (hasPrize && hasLink) riskScore += 0.5; // Prize scams
+    
+    // Medium-risk indicators
     if (hasLink) riskScore += 0.3;
     if (hasOTP) riskScore += 0.4;
     if (hasUrgency) riskScore += 0.2;
     if (hasPrize) riskScore += 0.3;
     if (hasBankTerms) riskScore += 0.2;
     if (hasPhishing) riskScore += 0.2;
-    if (hasFakeTransfer) riskScore += 0.6; // High risk for fake transfer messages
+    if (hasRomanceScam) riskScore += 0.3;
+    if (hasImpersonation) riskScore += 0.3;
+    if (hasIllegalSales) riskScore += 0.6; // High risk for illegal account/SIM sales
     
-    // Combinations are more dangerous
-    if (hasLink && hasUrgency) riskScore += 0.3;
-    if (hasOTP && hasBankTerms) riskScore += 0.4;
-    if (hasPrize && hasLink) riskScore += 0.4;
-    if (hasFakeTransfer && hasLink) riskScore += 0.5; // Very high risk
+    // Reduce score for legitimate patterns
+    if (isLegitTelco) riskScore -= 0.4;
+    if (isLegitBusiness) riskScore -= 0.3;
+    if (hasSIMScam && isLegitTelco) riskScore -= 0.5; // Legitimate SIM registration
+    
+    // Ensure score stays within bounds
+    riskScore = Math.max(0, Math.min(2.0, riskScore));
     
     const isScam = riskScore >= 0.5;
-    const confidence = Math.min(0.95, Math.max(0.1, riskScore));
+    const confidence = Math.min(0.95, Math.max(0.1, riskScore / 2.0));
     
     console.log('🔍 Fallback analysis result:', { isScam, confidence, riskScore });
     
     const result = isScam ? {
       isScam: true,
       confidence: confidence,
-      reasonTagalog: "Lolo at Lola, may mga suspicious na salita po itong mensahe. Nakita ko po may mga red flags tulad ng links, urgent na requests, o fake money transfer notifications.",
-      actionTagalog: "Huwag po munang mag-reply o mag-click ng kahit ano. I-delete na po natin ito para safe tayo."
+      reasonTagalog: "Lolo at Lola, may mga nakikitang delikadong pattern po itong mensahe. Mukhang isa po ito sa mga kilalang scam sa Pilipinas tulad ng fake money transfer, phishing, o investment scam.",
+      actionTagalog: "Huwag po munang mag-reply, mag-click, o magbigay ng kahit anong personal na impormasyon. I-delete na po natin ito para safe tayo."
     } : {
       isScam: false,
       confidence: 1 - confidence,
-      reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang delikadong bagay o suspicious na request.",
+      reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang mga pattern ng mga kilalang scam sa Pilipinas.",
       actionTagalog: "Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo."
     };
     

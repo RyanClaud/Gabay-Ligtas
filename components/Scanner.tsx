@@ -39,25 +39,25 @@ const ConfidenceMeter: React.FC<{ confidence: number; isScam: boolean }> = ({ co
   }
 
   return (
-    <div className={`w-full space-y-5 mt-6 bg-white p-7 rounded-[3rem] border-4 border-gray-100 shadow-xl transition-all duration-700 ${pulseClass}`}>
-      <div className="flex justify-between items-center px-2">
-        <div className="flex items-center gap-4">
-          <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white shadow-lg`}>
-            <i className={`fa-solid ${icon} text-2xl`}></i>
+    <div className={`w-full space-y-3 sm:space-y-4 mt-4 bg-white p-4 sm:p-6 rounded-[2rem] sm:rounded-[3rem] border-4 border-gray-100 shadow-xl transition-all duration-700 ${pulseClass}`}>
+      <div className="flex justify-between items-center px-1 sm:px-2">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-white shadow-lg`}>
+            <i className={`fa-solid ${icon} text-lg sm:text-xl`}></i>
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Status</span>
-            <span className={`text-2xl font-black leading-none ${isScam && displayConfidence > 0.7 ? 'text-red-600' : 'text-gray-800'}`}>
+            <span className="text-xs sm:text-sm font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Status</span>
+            <span className={`text-lg sm:text-xl font-black leading-none ${isScam && displayConfidence > 0.7 ? 'text-red-600' : 'text-gray-800'}`}>
               {label}
             </span>
           </div>
         </div>
         <div className="text-right">
-          <span className="text-3xl font-black text-gray-900">{animatedWidth}%</span>
+          <span className="text-xl sm:text-2xl font-black text-gray-900">{animatedWidth}%</span>
         </div>
       </div>
       
-      <div className="w-full h-12 bg-gray-100 rounded-full overflow-hidden p-2 border-4 border-white shadow-inner relative">
+      <div className="w-full h-8 sm:h-10 bg-gray-100 rounded-full overflow-hidden p-1.5 sm:p-2 border-4 border-white shadow-inner relative">
         <div 
           className={`h-full rounded-full bg-gradient-to-r ${colorClass} transition-all duration-[1200ms] ease-out shadow-md`}
           style={{ width: `${animatedWidth}%` }}
@@ -132,129 +132,135 @@ const Scanner: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Input Section */}
-      <div className="bg-white p-8 rounded-[3.5rem] safe-shadow border-2 border-gray-50 flex flex-col gap-6 relative overflow-hidden">
-        {loading && (
-          <div className="absolute top-0 left-0 w-full h-2 bg-blue-100 overflow-hidden">
-             <div className="h-full bg-blue-600 w-1/3 animate-scanRay"></div>
-          </div>
-        )}
-        
-        <div className="flex items-center gap-4 px-2">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all duration-500 ${loading ? 'bg-blue-600 text-white animate-pulse' : 'bg-blue-100 text-blue-600'}`}>
-            <i className={`fa-solid ${loading ? 'fa-satellite-dish' : 'fa-paste'}`}></i>
-          </div>
-          <div>
-            <h3 className="text-2xl font-black text-gray-900 leading-tight">Mensahe na Dumating</h3>
-            <p className="text-lg font-bold text-gray-500">I-paste po dito ang text</p>
-          </div>
-        </div>
-
-        <div className="relative group">
-          <textarea
-            className={`w-full h-72 p-7 rounded-[2.5rem] border-4 transition-all outline-none text-2xl font-medium shadow-inner resize-none ${
-              loading 
-                ? 'bg-blue-50 border-blue-200 opacity-60' 
-                : 'bg-blue-50/30 border-blue-50 focus:bg-white focus:border-blue-400'
-            }`}
-            placeholder="Ex. 'Nanalo ka ng 50k! I-click ang link na ito...'"
-            value={inputText}
-            readOnly={loading}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
-          />
+    <div className="h-full flex flex-col">
+      {/* All content in one scrollable container */}
+      <div className="flex-1 overflow-y-auto space-y-4 animate-fadeIn">
+        {/* Input Section */}
+        <div className="bg-white p-4 sm:p-6 rounded-[2rem] sm:rounded-[3rem] safe-shadow border-2 border-gray-50 flex flex-col gap-4 relative overflow-hidden">
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-20 h-20 border-8 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute top-0 left-0 w-full h-2 bg-blue-100 overflow-hidden">
+               <div className="h-full bg-blue-600 w-1/3 animate-scanRay"></div>
             </div>
           )}
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={handleScan}
-            disabled={loading || !inputText.trim()}
-            className={`py-8 rounded-[2.5rem] text-3xl font-black shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-4 relative overflow-hidden ${
-              loading 
-                ? 'bg-blue-800 text-white cursor-wait' 
-                : !inputText.trim()
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
-                : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-200 active:scale-105'
-            }`}
-          >
-            {loading ? (
-              <>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmerBtn"></div>
-                <i className="fa-solid fa-microchip animate-spin-slow"></i>
-                SINUSURI...
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-magnifying-glass-shield"></i>
-                ISURI ITO
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={handleClear}
-            disabled={loading}
-            className="py-5 rounded-[2.5rem] text-xl font-black text-gray-500 bg-white border-4 border-gray-100 flex items-center justify-center gap-3 active:scale-95 active:bg-gray-50 transition-all disabled:opacity-50"
-          >
-            <i className="fa-solid fa-eraser"></i>
-            BURAHIN ANG DETALYE
-          </button>
-        </div>
-      </div>
-
-      {/* Results Section */}
-      {result && (
-        <div className="animate-popIn space-y-6">
-          <ConfidenceMeter confidence={result.confidence} isScam={result.isScam} />
-
-          <div className={`p-8 rounded-[3.5rem] border-4 shadow-xl ${
-            result.isScam ? 'bg-red-50 border-red-500' : 'bg-green-50 border-green-500'
-          }`}>
-            <div className="flex items-center gap-5 mb-6">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-4xl shadow-md ${
-                result.isScam ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
-              }`}>
-                <i className={`fa-solid ${result.isScam ? 'fa-hand' : 'fa-circle-check'}`}></i>
-              </div>
-              <div>
-                <h4 className={`text-3xl font-black ${result.isScam ? 'text-red-800' : 'text-green-800'}`}>
-                  {result.isScam ? 'DELIKADO PO!' : 'LIGTAS PO ITO'}
-                </h4>
-                <p className="text-xl font-bold text-gray-600">Gabay ni Apo</p>
-              </div>
+          
+          <div className="flex items-center gap-3 px-2">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl transition-all duration-500 ${loading ? 'bg-blue-600 text-white animate-pulse' : 'bg-blue-100 text-blue-600'}`}>
+              <i className={`fa-solid ${loading ? 'fa-satellite-dish' : 'fa-paste'}`}></i>
             </div>
+            <div>
+              <h3 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">Mensahe na Dumating</h3>
+              <p className="text-sm sm:text-base font-bold text-gray-500">I-paste po dito ang text</p>
+            </div>
+          </div>
 
-            <div className="space-y-6">
-              <div className="bg-white/90 p-6 rounded-3xl border-2 border-gray-100 shadow-sm">
-                <p className="text-xl font-black text-gray-500 uppercase tracking-widest mb-1">Paliwanag ni Apo:</p>
-                <p className="text-2xl font-black text-gray-800 leading-tight">
-                  {result.reasonTagalog}
-                </p>
+          <div className="relative group">
+            <textarea
+              className={`w-full h-32 sm:h-40 p-4 sm:p-5 rounded-[1.5rem] sm:rounded-[2rem] border-4 transition-all outline-none text-base sm:text-lg font-medium shadow-inner resize-none ${
+                loading 
+                  ? 'bg-blue-50 border-blue-200 opacity-60' 
+                  : 'bg-blue-50/30 border-blue-50 focus:bg-white focus:border-blue-400'
+              }`}
+              placeholder="Ex. 'Nanalo ka ng 50k! I-click ang link na ito...'"
+              value={inputText}
+              readOnly={loading}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
+            />
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 sm:border-6 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleScan}
+              disabled={loading || !inputText.trim()}
+              className={`py-4 sm:py-6 rounded-[1.5rem] sm:rounded-[2rem] text-lg sm:text-2xl font-black shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3 relative overflow-hidden ${
+                loading 
+                  ? 'bg-blue-800 text-white cursor-wait' 
+                  : !inputText.trim()
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-200 active:scale-105'
+              }`}
+            >
+              {loading ? (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full animate-shimmerBtn"></div>
+                  <i className="fa-solid fa-microchip animate-spin-slow"></i>
+                  SINUSURI...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-magnifying-glass-shield"></i>
+                  ISURI ITO
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleClear}
+              disabled={loading}
+              className="py-3 sm:py-4 rounded-[1.5rem] sm:rounded-[2rem] text-sm sm:text-base font-black text-gray-500 bg-white border-4 border-gray-100 flex items-center justify-center gap-2 active:scale-95 active:bg-gray-50 transition-all disabled:opacity-50"
+            >
+              <i className="fa-solid fa-eraser"></i>
+              BURAHIN ANG DETALYE
+            </button>
+          </div>
+        </div>
+
+        {/* Results Section */}
+        {result && (
+          <div className="animate-popIn space-y-4">
+            <ConfidenceMeter confidence={result.confidence} isScam={result.isScam} />
+
+            <div className={`p-4 sm:p-6 rounded-[2rem] sm:rounded-[3rem] border-4 shadow-xl ${
+              result.isScam ? 'bg-red-50 border-red-500' : 'bg-green-50 border-green-500'
+            }`}>
+              <div className="flex items-center gap-4 mb-4">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-2xl sm:text-3xl shadow-md ${
+                  result.isScam ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+                }`}>
+                  <i className={`fa-solid ${result.isScam ? 'fa-hand' : 'fa-circle-check'}`}></i>
+                </div>
+                <div>
+                  <h4 className={`text-xl sm:text-2xl font-black ${result.isScam ? 'text-red-800' : 'text-green-800'}`}>
+                    {result.isScam ? 'DELIKADO PO!' : 'LIGTAS PO ITO'}
+                  </h4>
+                  <p className="text-sm sm:text-base font-bold text-gray-600">Gabay ni Apo</p>
+                </div>
               </div>
 
-              <div className={`p-8 rounded-3xl shadow-lg transform transition-all hover:scale-[1.02] ${
-                result.isScam ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
-              }`}>
-                <p className="text-3xl font-black text-center leading-tight">
-                  {result.actionTagalog}
-                </p>
+              <div className="space-y-4">
+                <div className="bg-white/90 p-4 sm:p-5 rounded-2xl border-2 border-gray-100 shadow-sm">
+                  <p className="text-sm sm:text-base font-black text-gray-500 uppercase tracking-widest mb-1">Paliwanag ni Apo:</p>
+                  <p className="text-base sm:text-lg font-black text-gray-800 leading-tight">
+                    {result.reasonTagalog}
+                  </p>
+                </div>
+
+                <div className={`p-4 sm:p-6 rounded-2xl shadow-lg transform transition-all hover:scale-[1.02] ${
+                  result.isScam ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+                }`}>
+                  <p className="text-base sm:text-xl font-black text-center leading-tight">
+                    {result.actionTagalog}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {!result && !loading && (
-        <div className="py-10 text-center opacity-30 grayscale pointer-events-none">
-          <i className="fa-solid fa-shield-halved text-7xl mb-4 text-blue-900"></i>
-          <p className="text-xl font-black text-blue-900 uppercase tracking-tighter">Laging Magingat Lolo at Lola</p>
-        </div>
-      )}
+        {!result && !loading && (
+          <div className="py-8 text-center opacity-30 grayscale pointer-events-none">
+            <i className="fa-solid fa-shield-halved text-4xl sm:text-6xl mb-3 text-blue-900"></i>
+            <p className="text-sm sm:text-base font-black text-blue-900 uppercase tracking-tighter">Laging Magingat Lolo at Lola</p>
+          </div>
+        )}
+
+        {/* Add some bottom padding to ensure content doesn't get cut off */}
+        <div className="h-4"></div>
+      </div>
 
       <style>{`
         @keyframes scanRay {
