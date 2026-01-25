@@ -142,13 +142,19 @@ export class ElevenLabsService {
 let elevenLabsService: ElevenLabsService | null = null;
 
 export const getElevenLabsService = (): ElevenLabsService | null => {
-  const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY;
+  // Try multiple ways to get the API key for different environments
+  const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || 
+                 process.env.VITE_ELEVENLABS_API_KEY || 
+                 process.env.ELEVENLABS_API_KEY;
   
   if (!apiKey) {
-    console.warn('⚠️ ElevenLabs API key not found');
+    console.warn('⚠️ ElevenLabs API key not found. Checked: VITE_ELEVENLABS_API_KEY, ELEVENLABS_API_KEY');
+    console.warn('⚠️ Available env vars:', Object.keys(import.meta.env));
     return null;
   }
 
+  console.log('✅ ElevenLabs API key found, initializing service');
+  
   if (!elevenLabsService) {
     elevenLabsService = new ElevenLabsService(apiKey);
   }

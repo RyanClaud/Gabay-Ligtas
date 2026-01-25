@@ -17,6 +17,7 @@
 2. **Set up environment variables:**
    - Copy `.env.local.example` to `.env.local`
    - Add your Gemini API key: `GEMINI_API_KEY=your_api_key_here`
+   - Add your ElevenLabs API key: `VITE_ELEVENLABS_API_KEY=your_elevenlabs_api_key_here`
 
 3. **Build the app:**
    ```bash
@@ -29,6 +30,30 @@
    ```
 
 ## 📦 Deployment Options
+
+### Environment Variables for Production
+
+**Important**: Make sure to set these environment variables in your deployment platform:
+
+- `GEMINI_API_KEY` - Your Google Gemini API key
+- `VITE_ELEVENLABS_API_KEY` - Your ElevenLabs API key (must have VITE_ prefix)
+
+**Platform-specific setup:**
+
+**Netlify:**
+- Go to Site Settings > Environment Variables
+- Add both keys with their values
+
+**Vercel:**
+- Go to Project Settings > Environment Variables  
+- Add both keys with their values
+
+**GitHub Pages:**
+- Use GitHub Secrets in your repository settings
+- Reference them in your GitHub Actions workflow
+
+**Firebase Hosting:**
+- Use `firebase functions:config:set` for environment variables
 
 ### Option 1: Static Hosting (Recommended)
 
