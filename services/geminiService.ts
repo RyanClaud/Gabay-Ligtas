@@ -325,7 +325,7 @@ RESPONSE FORMAT: JSON ONLY.`;
     console.error('❌ Analysis failed:', error);
     
     // Return cached result if available, even if expired
-    const fallbackCache = cacheService.get(`gemini_analysis_${text.slice(0, 50)}`);
+    const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_analysis_${text.slice(0, 50)}`);
     if (fallbackCache) {
       console.log('📱 Using fallback cached result');
       return fallbackCache;
