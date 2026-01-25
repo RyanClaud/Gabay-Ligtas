@@ -1,0 +1,7 @@
+{
+  "name": "Gabay Ligtas: Senior Cyber-Guardian",
+  "description": "A Filipino cybercrime awareness and scam alert system designed specifically for elderly users, featuring scam link scanning, voice warnings in Tagalog, and easy help access.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
