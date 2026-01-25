@@ -177,22 +177,95 @@ export const playNotificationSound = (isScam: boolean) => {
 };
 
 export const speakSystem = (text: string) => {
-  if (!('speechSynthesis' in window)) return;
+  console.log('🔊 Using browser speech synthesis fallback');
+  if (!('speechSynthesis' in window)) {
+    console.warn('❌ Speech synthesis not supported in this browser');
+    return;
+  }
+  
   stopVoice();
   const processed = normalizePhonetic(text);
   const utterance = new SpeechSynthesisUtterance(processed);
   
-  const voices = window.speechSynthesis.getVoices();
-  const tlVoice = voices.find(v => v.lang.includes('tl') || v.lang.includes('PH')) || 
-                  voices.find(v => v.name.toLowerCase().includes('google') && v.lang.includes('en'));
+  // Wait for voices to load
+  const setVoiceAndSpeak = () => {
+    const voices = window.speechSynthesis.getVoices();
+    console.log('🎤 Available voices:', voices.map(v => `${v.name} (${v.lang})`));
+    
+    // Try to find Filipino/Tagalog voices in order of preference
+    const tlVoice = voices.find(v => v.lang.includes('tl-PH')) ||
+                    voices.find(v => v.lang.includes('tl')) ||
+                    voices.find(v => v.lang.includes('fil')) ||
+                    voices.find(v => v.name.toLowerCase().includes('filipino')) ||
+                    voices.find(v => v.name.toLowerCase().includes('tagalog')) ||
+                    voices.find(v => v.name.toLowerCase().includes('google') && v.lang.includes('en-US')) ||
+                    voices.find(v => v.lang.includes('en-US'));
+    
+    if (tlVoice) {
+      console.log('🎤 Selected voice:', tlVoice.name, tlVoice.lang);
+      utterance.voice = tlVoice;
+    } else {
+      console.warn('⚠️ No Filipino voice found, using default');
+    }
+    
+    utterance.lang = 'tl-PH';
+    utterance.pitch = 1.0; 
+    utterance.rate = 0.75; // Slower speed for better elder understanding
+    utterance.volume = 0.9;
+    
+    utterance.onstart = () => console.log('🔊 Speech started');
+    utterance.onend = () => console.log('🔊 Speech ended');
+    utterance.onerror = (e) => console.error('❌ Speech error:', e);
+    
+    window.speechSynthesis.speak(utterance);
+  };
   
-  if (tlVoice) utterance.voice = tlVoice;
+  // Check if voices are already loaded
+  if (window.speechSynthesis.getVoices().length > 0) {
+    setVoiceAndSpeak();
+  } else {
+    // Wait for voices to load
+    window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak;
+  }
+};
+
+export const testVoices = () => {
+  if (!('speechSynthesis' in window)) {
+    console.log('❌ Speech synthesis not supported');
+    return;
+  }
+  
+  const voices = window.speechSynthesis.getVoices();
+  console.log('🎤 Available voices:');
+  voices.forEach((voice, index) => {
+    console.log(`${index + 1}. ${voice.name} (${voice.lang}) - ${voice.localService ? 'Local' : 'Remote'}`);
+  });
+  
+  // Test Filipino voice
+  const testText = "Kumusta po kayo, Lolo at Lola. Ito po ay test ng Filipino voice.";
+  const utterance = new SpeechSynthesisUtterance(testText);
+  
+  const tlVoice = voices.find(v => v.lang.includes('tl-PH')) ||
+                  voices.find(v => v.lang.includes('tl')) ||
+                  voices.find(v => v.lang.includes('fil')) ||
+                  voices.find(v => v.name.toLowerCase().includes('filipino'));
+  
+  if (tlVoice) {
+    console.log('🎤 Testing Filipino voice:', tlVoice.name);
+    utterance.voice = tlVoice;
+  } else {
+    console.log('⚠️ No Filipino voice found, testing with default');
+  }
   
   utterance.lang = 'tl-PH';
-  utterance.pitch = 1.0; 
-  utterance.rate = 0.75; // Slower speed for better elder understanding
+  utterance.rate = 0.75;
   window.speechSynthesis.speak(utterance);
 };
+
+// Add to window for debugging
+if (typeof window !== 'undefined') {
+  (window as any).testVoices = testVoices;
+}
 
 export const playVoiceWarning = async (text: string): Promise<void> => {
   const myId = ++currentSpeechId;
@@ -223,12 +296,20 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     return;
   }
 
-  if (checkQuotaStatus() || !navigator.onLine) {
+  if (checkQuotaStatus()) {
+    console.log('⚠️ TTS quota locked, using browser speech synthesis');
+    speakSystem(cleanText);
+    return;
+  }
+  
+  if (!navigator.onLine) {
+    console.log('⚠️ Offline, using browser speech synthesis');
     speakSystem(cleanText);
     return;
   }
 
   try {
+    console.log('🤖 Attempting Gemini TTS...');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -247,6 +328,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (base64Audio) {
+      console.log('✅ Gemini TTS successful, playing audio');
       const rawBytes = decode(base64Audio);
       await saveAudioToDB(cleanText, rawBytes);
       const audioBuffer = await decodeAudioData(rawBytes, ctx);
@@ -257,10 +339,16 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
       activeSources.add(source);
       source.start(0);
     } else {
+      console.warn('⚠️ Gemini TTS returned no audio data, falling back to browser speech');
       speakSystem(cleanText);
     }
   } catch (error: any) {
-    if (error.message?.includes('429')) setQuotaLock();
+    console.error('❌ Gemini TTS failed:', error.message);
+    if (error.message?.includes('429')) {
+      console.warn('⚠️ TTS quota exceeded, setting lock');
+      setQuotaLock();
+    }
+    console.log('🔄 Falling back to browser speech synthesis');
     speakSystem(cleanText);
   }
 };

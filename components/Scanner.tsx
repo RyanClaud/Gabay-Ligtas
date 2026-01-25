@@ -225,6 +225,19 @@ const Scanner: React.FC = () => {
               <i className="fa-solid fa-eraser"></i>
               BURAHIN ANG DETALYE
             </button>
+
+            {/* TTS Test Button for debugging */}
+            <button
+              onClick={() => {
+                import('../services/geminiService').then(({ testVoices }) => {
+                  testVoices();
+                });
+              }}
+              className="py-2 sm:py-3 rounded-[1.5rem] sm:rounded-[2rem] text-xs sm:text-sm font-black text-blue-500 bg-blue-50 border-2 border-blue-200 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <i className="fa-solid fa-volume-high"></i>
+              TEST VOICE
+            </button>
           </div>
         </div>
 
