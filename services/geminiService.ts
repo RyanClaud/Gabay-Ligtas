@@ -266,6 +266,8 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 };
 
 export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
+  console.log('🔍 Starting analysis for text:', text.substring(0, 50) + '...');
+  
   // Check cache first
   const cached = cacheService.getScanResult(text);
   if (cached) {
@@ -273,31 +275,70 @@ export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
     return cached;
   }
 
+  // Enhanced system instruction with better analysis guidelines
   const systemInstruction = `You are "Apo", a caring, respectful, and expert Cyber-Guardian for Filipino Senior Citizens. 
-Your goal is to explain risks in a natural, conversational Tagalog that sounds like a helpful grandchild.
+Your goal is to analyze messages accurately and explain risks in natural, conversational Tagalog.
 
-CRITICAL SCAM INDICATORS:
-1. ANY LINK (unsolicited).
-2. Requests for OTP, PIN, MPIN, or Password.
-3. False Urgency or Huge Prizes.
+ANALYSIS GUIDELINES:
+1. CAREFULLY analyze the actual content of the message
+2. Look for REAL scam indicators:
+   - Unsolicited links or suspicious URLs
+   - Requests for OTP, PIN, MPIN, passwords, or personal info
+   - False urgency ("Act now!", "Limited time!")
+   - Too-good-to-be-true offers (huge prizes, free money)
+   - Impersonation of banks, government, or companies
+   - Poor grammar or suspicious sender information
 
-TONE & STYLE RULES:
-- Always use "po" and "opo" to show respect to Lolo and Lola.
-- Phrase ReasonTagalog like a conversation: "Lola, mag-ingat po tayo dahil may link itong mensahe na pwedeng manakaw ang inyong detalye."
-- Phrase ActionTagalog clearly but kindly: "Huwag niyo po itong pipindutin. Burahin na po natin ang message para tayo ay ligtas."
+3. LEGITIMATE messages are SAFE:
+   - Normal conversations between friends/family
+   - Genuine business communications
+   - Educational content
+   - News or informational messages
+   - Personal messages without suspicious elements
 
-RESPONSE FORMAT: JSON ONLY.`;
+4. Be ACCURATE in your assessment:
+   - If it's clearly safe, mark isScam: false with appropriate confidence
+   - If it's clearly dangerous, mark isScam: true with high confidence
+   - If uncertain, use moderate confidence levels
+
+RESPONSE RULES:
+- Use "po" and "opo" for respect
+- ReasonTagalog: Explain WHY it's safe or dangerous based on actual content
+- ActionTagalog: Give appropriate advice (delete if scam, or "okay lang po" if safe)
+- Be conversational like a caring grandchild
+
+RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTagalog (string), actionTagalog (string)`;
 
   try {
+    console.log('🤖 Calling Gemini API...');
+    
     const result = await cacheService.cacheApiCall(
       `gemini_analysis_${text.slice(0, 50)}`,
       async () => {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+        
+        if (!apiKey) {
+          throw new Error('API key not found. Please check your environment variables.');
+        }
+        
+        console.log('🔑 API key found, initializing Gemini...');
+        
+        const ai = new GoogleGenAI({ apiKey });
+        
+        console.log('📤 Sending request to Gemini...');
+        
         const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Mensahe na dapat suriin: "${text}"`,
-          config: {
-            systemInstruction: systemInstruction,
+          model: "gemini-1.5-flash", // Using stable model name
+          contents: [{
+            parts: [{
+              text: `Please analyze this message for scam indicators: "${text}"`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.1, // Low temperature for consistent analysis
+            topK: 1,
+            topP: 0.8,
+            maxOutputTokens: 1000,
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -310,9 +351,32 @@ RESPONSE FORMAT: JSON ONLY.`;
               required: ["isScam", "confidence", "reasonTagalog", "actionTagalog"],
             },
           },
+          systemInstruction: {
+            parts: [{ text: systemInstruction }]
+          }
         });
         
-        return JSON.parse(response.text || '{}');
+        console.log('📥 Received response from Gemini');
+        
+        const responseText = response.response.text();
+        console.log('📄 Raw response:', responseText);
+        
+        if (!responseText) {
+          throw new Error('Empty response from Gemini API');
+        }
+        
+        const parsedResult = JSON.parse(responseText);
+        console.log('✅ Parsed result:', parsedResult);
+        
+        // Validate the response structure
+        if (typeof parsedResult.isScam !== 'boolean' || 
+            typeof parsedResult.confidence !== 'number' ||
+            typeof parsedResult.reasonTagalog !== 'string' ||
+            typeof parsedResult.actionTagalog !== 'string') {
+          throw new Error('Invalid response structure from Gemini API');
+        }
+        
+        return parsedResult;
       },
       60 * 60 * 1000 // Cache for 1 hour
     );
@@ -320,23 +384,66 @@ RESPONSE FORMAT: JSON ONLY.`;
     // Also store in scan results cache
     cacheService.storeScanResult(text, result);
     
+    console.log('✅ Analysis completed successfully:', result);
     return result;
-  } catch (error) {
-    console.error('❌ Analysis failed:', error);
     
-    // Return cached result if available, even if expired
+  } catch (error: any) {
+    console.error('❌ Analysis failed:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      apiKey: process.env.API_KEY ? 'Present' : 'Missing',
+      geminiApiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing'
+    });
+    
+    // Try to get cached result if available, even if expired
     const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_analysis_${text.slice(0, 50)}`);
     if (fallbackCache) {
       console.log('📱 Using fallback cached result');
       return fallbackCache;
     }
 
-    // Default safe response
-    return {
-      isScam: true,
-      confidence: 0.98,
-      reasonTagalog: "Lolo at Lola, naglalaman po ito ng kahina-hinalang link o humihingi ng inyong pribadong detalye. Mag-ingat po tayo.",
-      actionTagalog: "Burahin na po agad ang mensaheng ito at huwag magbibigay ng anumang impormasyon sa kanila."
-    };
+    // Provide a more nuanced default response based on simple text analysis
+    const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|click here|click this/i.test(text);
+    const hasOTP = /otp|pin|mpin|password|passcode|verification code|verify/i.test(text);
+    const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline/i.test(text);
+    const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward/i.test(text);
+    const hasBankTerms = /bank|account|suspended|verify|confirm|update|security/i.test(text);
+    const hasPhishing = /click|download|install|update|confirm|verify|login|sign in/i.test(text);
+    
+    const suspiciousCount = [hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing].filter(Boolean).length;
+    
+    // More sophisticated scoring
+    let riskScore = 0;
+    if (hasLink) riskScore += 0.3;
+    if (hasOTP) riskScore += 0.4;
+    if (hasUrgency) riskScore += 0.2;
+    if (hasPrize) riskScore += 0.3;
+    if (hasBankTerms) riskScore += 0.2;
+    if (hasPhishing) riskScore += 0.2;
+    
+    // Combinations are more dangerous
+    if (hasLink && hasUrgency) riskScore += 0.3;
+    if (hasOTP && hasBankTerms) riskScore += 0.4;
+    if (hasPrize && hasLink) riskScore += 0.4;
+    
+    const isScam = riskScore >= 0.5;
+    const confidence = Math.min(0.95, Math.max(0.1, riskScore));
+    
+    if (isScam) {
+      return {
+        isScam: true,
+        confidence: confidence,
+        reasonTagalog: "Lolo at Lola, may mga suspicious na salita po itong mensahe. Nakita ko po may mga red flags tulad ng links, urgent na requests, o hinihingi na personal info.",
+        actionTagalog: "Huwag po munang mag-reply o mag-click ng kahit ano. I-delete na po natin ito para safe tayo."
+      };
+    } else {
+      return {
+        isScam: false,
+        confidence: 1 - confidence,
+        reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang delikadong bagay o suspicious na request.",
+        actionTagalog: "Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo."
+      };
+    }
   }
 };

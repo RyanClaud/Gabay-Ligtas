@@ -139,7 +139,7 @@ const Scanner: React.FC = () => {
             placeholder="Ex. 'Nanalo ka ng 50k! I-click ang link na ito...'"
             value={inputText}
             readOnly={loading}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setInputText(e.target.value)}
           />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
