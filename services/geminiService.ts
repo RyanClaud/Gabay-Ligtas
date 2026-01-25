@@ -268,10 +268,17 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
   console.log('🔍 Starting analysis for text:', text.substring(0, 50) + '...');
   
-  // Check cache first
+  // Create a unique hash for the full text content
+  const textHash = text.split('').reduce((hash, char) => {
+    return ((hash << 5) - hash) + char.charCodeAt(0);
+  }, 0).toString(36);
+  
+  console.log('🔑 Generated hash for text:', textHash);
+  
+  // Check cache first using the full text
   const cached = cacheService.getScanResult(text);
   if (cached) {
-    console.log('📱 Using cached analysis result');
+    console.log('📱 Using cached analysis result for hash:', textHash);
     return cached;
   }
 
@@ -282,14 +289,16 @@ Your goal is to analyze messages accurately and explain risks in natural, conver
 ANALYSIS GUIDELINES:
 1. CAREFULLY analyze the actual content of the message
 2. Look for REAL scam indicators:
-   - Unsolicited links or suspicious URLs
+   - Unsolicited links or suspicious URLs (especially shortened links like bit.ly)
    - Requests for OTP, PIN, MPIN, passwords, or personal info
    - False urgency ("Act now!", "Limited time!")
    - Too-good-to-be-true offers (huge prizes, free money)
+   - Fake money transfer notifications with suspicious links
    - Impersonation of banks, government, or companies
    - Poor grammar or suspicious sender information
 
 3. LEGITIMATE messages are SAFE:
+   - Official telco messages (TM, Globe, Smart) about SIM registration
    - Normal conversations between friends/family
    - Genuine business communications
    - Educational content
@@ -312,8 +321,9 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
   try {
     console.log('🤖 Calling Gemini API...');
     
+    // Use the full text hash for caching instead of just first 50 characters
     const result = await cacheService.cacheApiCall(
-      `gemini_analysis_${text.slice(0, 50)}`,
+      `gemini_analysis_${textHash}`,
       async () => {
         const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
         
@@ -381,7 +391,7 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
       60 * 60 * 1000 // Cache for 1 hour
     );
 
-    // Also store in scan results cache
+    // Store in scan results cache using full text
     cacheService.storeScanResult(text, result);
     
     console.log('✅ Analysis completed successfully:', result);
@@ -396,22 +406,26 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
       geminiApiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing'
     });
     
-    // Try to get cached result if available, even if expired
-    const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_analysis_${text.slice(0, 50)}`);
+    // Try to get cached result if available, even if expired (using full text hash)
+    const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_analysis_${textHash}`);
     if (fallbackCache) {
       console.log('📱 Using fallback cached result');
       return fallbackCache;
     }
 
     // Provide a more nuanced default response based on simple text analysis
-    const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|click here|click this/i.test(text);
+    console.log('🔍 Performing fallback analysis...');
+    const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|click here|click this/i.test(text);
     const hasOTP = /otp|pin|mpin|password|passcode|verification code|verify/i.test(text);
     const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline/i.test(text);
-    const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward/i.test(text);
-    const hasBankTerms = /bank|account|suspended|verify|confirm|update|security/i.test(text);
+    const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward|bonus/i.test(text);
+    const hasBankTerms = /bank|account|suspended|verify|confirm|update|security|balance|received.*php|new balance/i.test(text);
     const hasPhishing = /click|download|install|update|confirm|verify|login|sign in/i.test(text);
+    const hasFakeTransfer = /received.*php.*from.*new balance.*claim/i.test(text.toLowerCase());
     
-    const suspiciousCount = [hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing].filter(Boolean).length;
+    console.log('🔍 Fallback analysis indicators:', {
+      hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing, hasFakeTransfer
+    });
     
     // More sophisticated scoring
     let riskScore = 0;
@@ -421,29 +435,34 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     if (hasPrize) riskScore += 0.3;
     if (hasBankTerms) riskScore += 0.2;
     if (hasPhishing) riskScore += 0.2;
+    if (hasFakeTransfer) riskScore += 0.6; // High risk for fake transfer messages
     
     // Combinations are more dangerous
     if (hasLink && hasUrgency) riskScore += 0.3;
     if (hasOTP && hasBankTerms) riskScore += 0.4;
     if (hasPrize && hasLink) riskScore += 0.4;
+    if (hasFakeTransfer && hasLink) riskScore += 0.5; // Very high risk
     
     const isScam = riskScore >= 0.5;
     const confidence = Math.min(0.95, Math.max(0.1, riskScore));
     
-    if (isScam) {
-      return {
-        isScam: true,
-        confidence: confidence,
-        reasonTagalog: "Lolo at Lola, may mga suspicious na salita po itong mensahe. Nakita ko po may mga red flags tulad ng links, urgent na requests, o hinihingi na personal info.",
-        actionTagalog: "Huwag po munang mag-reply o mag-click ng kahit ano. I-delete na po natin ito para safe tayo."
-      };
-    } else {
-      return {
-        isScam: false,
-        confidence: 1 - confidence,
-        reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang delikadong bagay o suspicious na request.",
-        actionTagalog: "Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo."
-      };
-    }
+    console.log('🔍 Fallback analysis result:', { isScam, confidence, riskScore });
+    
+    const result = isScam ? {
+      isScam: true,
+      confidence: confidence,
+      reasonTagalog: "Lolo at Lola, may mga suspicious na salita po itong mensahe. Nakita ko po may mga red flags tulad ng links, urgent na requests, o fake money transfer notifications.",
+      actionTagalog: "Huwag po munang mag-reply o mag-click ng kahit ano. I-delete na po natin ito para safe tayo."
+    } : {
+      isScam: false,
+      confidence: 1 - confidence,
+      reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang delikadong bagay o suspicious na request.",
+      actionTagalog: "Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo."
+    };
+    
+    // Cache the fallback result too
+    cacheService.storeScanResult(text, result);
+    
+    return result;
   }
 };

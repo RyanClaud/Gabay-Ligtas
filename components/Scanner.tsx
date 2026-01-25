@@ -106,6 +106,28 @@ const Scanner: React.FC = () => {
     setInputText('');
     setResult(null);
     stopVoice();
+    
+    // Clear any cached results for this session
+    if (inputText.trim()) {
+      // Clear from both cache layers
+      const textHash = inputText.split('').reduce((hash, char) => {
+        return ((hash << 5) - hash) + char.charCodeAt(0);
+      }, 0).toString(36);
+      
+      // Clear from localStorage if accessible
+      try {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+          if (key.includes('scan_') || key.includes('gemini_analysis_')) {
+            localStorage.removeItem(key);
+          }
+        });
+        console.log('🧹 Cleared analysis cache');
+      } catch (error) {
+        console.warn('Could not clear cache:', error);
+      }
+    }
+    
     playVoiceWarning("Binura na po natin ang detalye. Handa na po muli ang inyong checker.");
   };
 
