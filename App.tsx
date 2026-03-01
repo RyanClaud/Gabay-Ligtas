@@ -8,7 +8,6 @@ import SplashScreen from './components/SplashScreen';
 import PWAUpdateNotification from './components/PWAUpdateNotification';
 import PWAStatus from './components/PWAStatus';
 import PerformanceMonitor from './components/PerformanceMonitor';
-import DebugPanel from './components/DebugPanel';
 import { stopVoice } from './services/geminiService';
 import './services/pwaService'; // Initialize PWA service
 
@@ -48,7 +47,6 @@ const App: React.FC = () => {
       <PWAUpdateNotification />
       <PWAStatus />
       <PerformanceMonitor />
-      <DebugPanel />
       
       {/* Splash Screen Overlay */}
       {showSplash && <SplashScreen />}
