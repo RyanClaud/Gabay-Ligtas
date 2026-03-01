@@ -3,7 +3,6 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScamAnalysis } from "../types";
 import { cacheService } from "./cacheService";
 import { getElevenLabsService, FILIPINO_VOICES } from "./elevenLabsService";
-import { getHuggingFaceService, TTS_MODELS } from "./huggingFaceService";
 
 const DB_NAME = 'GabayLigtasAudioDBV12'; // Incremented version for new voice speed
 const STORE_NAME = 'audio_cache';
@@ -118,6 +117,30 @@ function decode(base64: string): Uint8Array {
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
   return bytes;
+}
+
+/**
+ * Clear all cached audio (useful if audio is corrupted)
+ */
+export const clearAudioCache = async (): Promise<void> => {
+  try {
+    // Clear memory cache
+    audioCache.clear();
+    
+    // Clear IndexedDB cache
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    await tx.objectStore(STORE_NAME).clear();
+    
+    console.log('✅ Audio cache cleared successfully');
+  } catch (error) {
+    console.error('❌ Failed to clear audio cache:', error);
+  }
+};
+
+// Make clearAudioCache available globally for debugging
+if (typeof window !== 'undefined') {
+  (window as any).clearAudioCache = clearAudioCache;
 }
 
 async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
@@ -264,54 +287,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     return;
   }
 
-  // Try Hugging Face TTS first (free, Tagalog support, via proxy)
-  const huggingFace = getHuggingFaceService();
-  if (navigator.onLine) {
-    try {
-      console.log('🎤 Attempting Hugging Face TTS...');
-      
-      // Use Filipino-optimized text
-      const filipinoText = `Mga Lolo at Lola, ${cleanText}`;
-      const audioBuffer = await huggingFace.generateSpeech(
-        filipinoText,
-        TTS_MODELS.MMS_TTS // Facebook's MMS TTS for Tagalog
-      );
-
-      if (myId !== currentSpeechId) return;
-
-      // Create a copy of the ArrayBuffer before using it
-      const audioBufferCopy = audioBuffer.slice(0);
-      
-      // Convert ArrayBuffer to AudioBuffer with error handling
-      let audioData: AudioBuffer;
-      try {
-        audioData = await ctx.decodeAudioData(audioBufferCopy);
-      } catch (decodeError) {
-        console.error('❌ Failed to decode Hugging Face audio data:', decodeError);
-        throw new Error('Audio decoding failed');
-      }
-      
-      // Cache the audio using original buffer
-      const uint8Array = new Uint8Array(audioBuffer);
-      await saveAudioToDB(cleanText, uint8Array);
-      audioCache.set(cleanText, audioData);
-
-      // Play the audio
-      console.log('✅ Hugging Face TTS successful, playing audio');
-      const source = ctx.createBufferSource();
-      source.buffer = audioData;
-      source.connect(ctx.destination);
-      activeSources.add(source);
-      source.start(0);
-      return;
-
-    } catch (error: any) {
-      console.error('❌ Hugging Face TTS failed:', error.message);
-      // Continue to ElevenLabs fallback
-    }
-  }
-
-  // Try ElevenLabs TTS as fallback
+  // Try ElevenLabs TTS first (works reliably)
   const elevenLabs = getElevenLabsService();
   if (elevenLabs && navigator.onLine) {
     try {
@@ -364,7 +340,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     }
   }
 
-  // Fallback to Gemini TTS if both Hugging Face and ElevenLabs fail
+  // Fallback to Gemini TTS if ElevenLabs fails
   if (checkQuotaStatus()) {
     console.log('⚠️ TTS quota locked, using browser speech synthesis');
     speakSystem(cleanText);
