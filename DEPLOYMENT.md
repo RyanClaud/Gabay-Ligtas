@@ -17,7 +17,8 @@
 2. **Set up environment variables:**
    - Copy `.env.local.example` to `.env.local`
    - Add your Gemini API key: `GEMINI_API_KEY=your_api_key_here`
-   - Add your ElevenLabs API key: `VITE_ELEVENLABS_API_KEY=your_elevenlabs_api_key_here`
+   - (Optional) Add your Hugging Face token: `VITE_HUGGINGFACE_API_KEY=your_token_here`
+   - (Optional) Add your ElevenLabs API key: `VITE_ELEVENLABS_API_KEY=your_elevenlabs_api_key_here`
 
 3. **Build the app:**
    ```bash
@@ -35,8 +36,14 @@
 
 **Important**: Make sure to set these environment variables in your deployment platform:
 
-- `GEMINI_API_KEY` - Your Google Gemini API key
-- `VITE_ELEVENLABS_API_KEY` - Your ElevenLabs API key (must have VITE_ prefix)
+**Required:**
+- `GEMINI_API_KEY` - Your Google Gemini API key (for scam analysis)
+
+**Optional (TTS will work without these):**
+- `VITE_HUGGINGFACE_API_KEY` - Your Hugging Face token (optional, TTS works without it)
+- `VITE_ELEVENLABS_API_KEY` - Your ElevenLabs API key (fallback TTS)
+
+**Note**: The app uses Hugging Face TTS by default, which works without an API key!
 
 **Platform-specific setup:**
 

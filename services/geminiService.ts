@@ -3,6 +3,7 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ScamAnalysis } from "../types";
 import { cacheService } from "./cacheService";
 import { getElevenLabsService, FILIPINO_VOICES } from "./elevenLabsService";
+import { getHuggingFaceService, TTS_MODELS } from "./huggingFaceService";
 
 const DB_NAME = 'GabayLigtasAudioDBV12'; // Incremented version for new voice speed
 const STORE_NAME = 'audio_cache';
@@ -263,7 +264,54 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     return;
   }
 
-  // Try ElevenLabs TTS first
+  // Try Hugging Face TTS first (free and supports Tagalog)
+  const huggingFace = getHuggingFaceService();
+  if (navigator.onLine) {
+    try {
+      console.log('🎤 Attempting Hugging Face TTS...');
+      
+      // Use Filipino-optimized text
+      const filipinoText = `Mga Lolo at Lola, ${cleanText}`;
+      const audioBuffer = await huggingFace.generateSpeech(
+        filipinoText,
+        TTS_MODELS.MMS_TTS // Facebook's MMS TTS for Tagalog
+      );
+
+      if (myId !== currentSpeechId) return;
+
+      // Create a copy of the ArrayBuffer before using it
+      const audioBufferCopy = audioBuffer.slice(0);
+      
+      // Convert ArrayBuffer to AudioBuffer with error handling
+      let audioData: AudioBuffer;
+      try {
+        audioData = await ctx.decodeAudioData(audioBufferCopy);
+      } catch (decodeError) {
+        console.error('❌ Failed to decode Hugging Face audio data:', decodeError);
+        throw new Error('Audio decoding failed');
+      }
+      
+      // Cache the audio using original buffer
+      const uint8Array = new Uint8Array(audioBuffer);
+      await saveAudioToDB(cleanText, uint8Array);
+      audioCache.set(cleanText, audioData);
+
+      // Play the audio
+      console.log('✅ Hugging Face TTS successful, playing audio');
+      const source = ctx.createBufferSource();
+      source.buffer = audioData;
+      source.connect(ctx.destination);
+      activeSources.add(source);
+      source.start(0);
+      return;
+
+    } catch (error: any) {
+      console.error('❌ Hugging Face TTS failed:', error.message);
+      // Continue to ElevenLabs fallback
+    }
+  }
+
+  // Try ElevenLabs TTS as fallback
   const elevenLabs = getElevenLabsService();
   if (elevenLabs && navigator.onLine) {
     try {
@@ -316,7 +364,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     }
   }
 
-  // Fallback to Gemini TTS if ElevenLabs fails or is unavailable
+  // Fallback to Gemini TTS if both Hugging Face and ElevenLabs fail
   if (checkQuotaStatus()) {
     console.log('⚠️ TTS quota locked, using browser speech synthesis');
     speakSystem(cleanText);
