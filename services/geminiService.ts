@@ -264,7 +264,54 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     return;
   }
 
-  // Try ElevenLabs TTS first (works in browser)
+  // Try Hugging Face TTS first (free, Tagalog support, via proxy)
+  const huggingFace = getHuggingFaceService();
+  if (navigator.onLine) {
+    try {
+      console.log('🎤 Attempting Hugging Face TTS...');
+      
+      // Use Filipino-optimized text
+      const filipinoText = `Mga Lolo at Lola, ${cleanText}`;
+      const audioBuffer = await huggingFace.generateSpeech(
+        filipinoText,
+        TTS_MODELS.MMS_TTS // Facebook's MMS TTS for Tagalog
+      );
+
+      if (myId !== currentSpeechId) return;
+
+      // Create a copy of the ArrayBuffer before using it
+      const audioBufferCopy = audioBuffer.slice(0);
+      
+      // Convert ArrayBuffer to AudioBuffer with error handling
+      let audioData: AudioBuffer;
+      try {
+        audioData = await ctx.decodeAudioData(audioBufferCopy);
+      } catch (decodeError) {
+        console.error('❌ Failed to decode Hugging Face audio data:', decodeError);
+        throw new Error('Audio decoding failed');
+      }
+      
+      // Cache the audio using original buffer
+      const uint8Array = new Uint8Array(audioBuffer);
+      await saveAudioToDB(cleanText, uint8Array);
+      audioCache.set(cleanText, audioData);
+
+      // Play the audio
+      console.log('✅ Hugging Face TTS successful, playing audio');
+      const source = ctx.createBufferSource();
+      source.buffer = audioData;
+      source.connect(ctx.destination);
+      activeSources.add(source);
+      source.start(0);
+      return;
+
+    } catch (error: any) {
+      console.error('❌ Hugging Face TTS failed:', error.message);
+      // Continue to ElevenLabs fallback
+    }
+  }
+
+  // Try ElevenLabs TTS as fallback
   const elevenLabs = getElevenLabsService();
   if (elevenLabs && navigator.onLine) {
     try {

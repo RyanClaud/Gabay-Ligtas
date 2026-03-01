@@ -1,11 +1,8 @@
 # 🤗 Hugging Face TTS Setup Guide
 
-## ⚠️ Important Note: CORS Limitation
+## ✅ CORS Issue Solved!
 
-Hugging Face's Inference API has CORS restrictions that prevent direct browser access. This means:
-- **Hugging Face TTS currently works as a fallback** in production environments with a proxy
-- **ElevenLabs is the primary TTS** for browser-based applications
-- To use Hugging Face TTS, you would need to set up a backend proxy server
+We've created a Vercel serverless function (`/api/tts`) that acts as a proxy to Hugging Face's API. This bypasses CORS restrictions and allows Hugging Face TTS to work directly in the browser!
 
 ## Overview
 Hugging Face provides free, open-source TTS models that support Tagalog/Filipino. The best part? **No API key required for public models!**
@@ -62,12 +59,12 @@ If you want faster inference and higher rate limits:
 
 The app now uses this TTS priority:
 
-1. **ElevenLabs TTS** (Primary) - High quality, works in browser, requires API key
-2. **Hugging Face TTS** (Fallback - Production only) - Free, Tagalog support, needs proxy
+1. **Hugging Face TTS** (Primary) - Free, Tagalog support, via proxy
+2. **ElevenLabs TTS** (Fallback) - High quality, requires API key
 3. **Gemini TTS** (Fallback) - Google's TTS, requires API key
 4. **Browser Speech Synthesis** (Final fallback) - Built-in browser TTS
 
-**Note**: Due to CORS restrictions, Hugging Face TTS is currently disabled in development and only attempts in production environments where a proxy might be configured.
+**Technical**: We use a Vercel serverless function (`/api/tts`) to proxy requests to Hugging Face, bypassing CORS restrictions.
 
 ## 📊 Comparison
 

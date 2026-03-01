@@ -37,30 +37,24 @@ export class HuggingFaceService {
     console.log('🎤 Generating Hugging Face TTS for:', text.substring(0, 50) + '...');
     console.log('🎤 Using model:', model);
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add API key if available (optional for public models)
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-    }
-
+    // Use our proxy endpoint to bypass CORS
+    const proxyUrl = '/api/tts';
+    
     try {
-      const response = await fetch(`${this.baseUrl}/${model}`, {
+      const response = await fetch(proxyUrl, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          inputs: text,
-          options: {
-            wait_for_model: true, // Wait if model is loading
-          }
+          text,
+          model,
         }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Hugging Face TTS error: ${response.status} - ${errorText}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Hugging Face TTS error: ${response.status} - ${errorData.error || 'Unknown error'}`);
       }
 
       console.log('✅ Hugging Face TTS successful');
