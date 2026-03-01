@@ -59,12 +59,6 @@ const PWAStatus: React.FC = () => {
               Offline Mode
             </span>
           )}
-          
-          {isDevelopment && (
-            <span className="text-purple-600 font-medium">
-              Dev
-            </span>
-          )}
         </div>
       </div>
     </div>

@@ -9,7 +9,6 @@ import PWAUpdateNotification from './components/PWAUpdateNotification';
 import PWAStatus from './components/PWAStatus';
 import PerformanceMonitor from './components/PerformanceMonitor';
 import DebugPanel from './components/DebugPanel';
-import { EnvDebug } from './components/EnvDebug';
 import { stopVoice } from './services/geminiService';
 import './services/pwaService'; // Initialize PWA service
 
@@ -104,9 +103,6 @@ const App: React.FC = () => {
           <span className="text-xs sm:text-sm font-black uppercase tracking-tighter">Tulong</span>
         </button>
       </nav>
-      
-      {/* Debug component for development */}
-      <EnvDebug />
     </div>
   );
 };
