@@ -292,14 +292,10 @@ export const speakSystem = (text: string) => {
   // Check if voices are already loaded
   if (window.speechSynthesis.getVoices().length > 0) {
     setVoiceAndSpeak();
-  } else {
-    // Wait for voices to load
-    window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak;
-  }
-};
-    utterance.pitch = 1.0; 
-    utterance.rate = 0.75; // Slower speed for better elder understanding
-    utterance.volume = 0.9;
+    utterance.lang = 'tl-PH';
+    utterance.rate = 0.75; // Slower for seniors
+    utterance.pitch = 1.0; // Normal pitch
+    utterance.volume = 1.0; // Full volume
     
     utterance.onstart = () => console.log('🔊 Speech started');
     utterance.onend = () => console.log('🔊 Speech ended');
