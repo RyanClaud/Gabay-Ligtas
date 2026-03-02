@@ -6,12 +6,6 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     
-    // Debug environment variables
-    console.log('🔧 Vite Config Debug:');
-    console.log('  Mode:', mode);
-    console.log('  GEMINI_API_KEY:', env.GEMINI_API_KEY ? `Present (${env.GEMINI_API_KEY.length} chars)` : 'Missing');
-    console.log('  VITE_ELEVENLABS_API_KEY:', env.VITE_ELEVENLABS_API_KEY ? `Present (${env.VITE_ELEVENLABS_API_KEY.length} chars)` : 'Missing');
-    
     return {
       server: {
         port: 3000,

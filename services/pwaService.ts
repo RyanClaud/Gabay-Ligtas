@@ -13,14 +13,11 @@ class PWAService {
   async register(onUpdate?: (info: PWAUpdateInfo) => void): Promise<void> {
     // Skip service worker registration in development mode
     if (this.isDevelopment) {
-      console.log('🛠️ PWA: Development mode - Service Worker disabled');
-      
       // Clear any existing service workers in development
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         for (let registration of registrations) {
           await registration.unregister();
-          console.log('🧹 PWA: Unregistered existing service worker');
         }
       }
       
@@ -34,8 +31,6 @@ class PWAService {
         const registration = await navigator.serviceWorker.register('/sw.js', {
           scope: '/'
         });
-
-        console.log('🛡️ PWA: Service Worker registered successfully');
 
         // Check for updates
         registration.addEventListener('updatefound', () => {
@@ -121,10 +116,8 @@ class PWAService {
         // Clear localStorage
         localStorage.clear();
         sessionStorage.clear();
-        
-        console.log('🧹 PWA: All data cleared');
       } catch (error) {
-        console.error('❌ PWA: Error clearing data:', error);
+        console.error('PWA: Error clearing data:', error);
       }
     }
   }
@@ -139,6 +132,5 @@ if (typeof window !== 'undefined') {
   // In development, expose clear function globally
   if (import.meta.env.DEV) {
     (window as any).clearPWA = () => pwaService.clearAll();
-    console.log('🛠️ PWA: Development mode - Use clearPWA() to clear all data');
   }
 }

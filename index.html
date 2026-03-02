@@ -236,11 +236,8 @@
       document.body.removeChild(testElement);
       
       if (!hasBlueBackground) {
-        console.warn('⚠️ Tailwind CSS may not have loaded properly');
         // Add fallback classes to body
         document.body.classList.add('tailwind-fallback');
-      } else {
-        console.log('✅ Tailwind CSS loaded successfully');
       }
     }, 1000);
   });

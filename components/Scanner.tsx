@@ -141,8 +141,6 @@ const Scanner: React.FC = () => {
       if ('indexedDB' in window) {
         indexedDB.deleteDatabase('GabayLigtasAudioDBV12');
       }
-      
-      console.log('🧹 Cleared ALL cache data');
     } catch (error) {
       console.warn('Could not clear all cache:', error);
     }
@@ -224,43 +222,6 @@ const Scanner: React.FC = () => {
             >
               <i className="fa-solid fa-eraser"></i>
               BURAHIN ANG DETALYE
-            </button>
-
-            <button
-              onClick={async () => {
-                try {
-                  // Clear audio cache
-                  const { clearAudioCache } = await import('../services/geminiService');
-                  await clearAudioCache();
-                  
-                  // Also clear old databases
-                  const oldVersions = ['GabayLigtasAudioDBV12', 'GabayLigtasAudioDBV11', 'GabayLigtasAudioDBV10'];
-                  for (const oldDB of oldVersions) {
-                    try {
-                      indexedDB.deleteDatabase(oldDB);
-                    } catch (e) {
-                      console.warn('Could not delete', oldDB);
-                    }
-                  }
-                  
-                  // Clear localStorage cache version
-                  localStorage.removeItem('gabay_ligtas_cache_version');
-                  
-                  alert('✅ Lahat ng audio ay nabura na!\n\nMag-refresh ng page para sa bagong audio.');
-                  
-                  // Auto refresh after 2 seconds
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 2000);
-                } catch (error) {
-                  console.error('Failed to clear audio cache:', error);
-                  alert('❌ May problema sa pag-clear ng audio cache.');
-                }
-              }}
-              className="py-3 sm:py-4 rounded-[1.5rem] sm:rounded-[2rem] text-sm sm:text-base font-black text-orange-600 bg-orange-50 border-4 border-orange-200 flex items-center justify-center gap-2 active:scale-95 active:bg-orange-100 transition-all"
-            >
-              <i className="fa-solid fa-volume-xmark"></i>
-              BURAHIN ANG AUDIO
             </button>
           </div>
         </div>

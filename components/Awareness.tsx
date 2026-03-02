@@ -6,51 +6,67 @@ import { playVoiceWarning, stopVoice } from '../services/geminiService';
 const SCAMS: AwarenessArticle[] = [
   {
     id: '1',
-    title: 'Panloloko sa GCash',
-    description: 'Pekeng mensahe na humihingi ng iyong MPIN o OTP.',
+    title: 'Phishing Texts (GCash, Maya, Banks)',
+    description: 'Pekeng mensahe na may kakaibang link at humihingi ng OTP o MPIN.',
     icon: 'fa-mobile-screen-button',
     color: 'bg-blue-500',
-    details: 'Laging tandaan: Ang tunay na GCash o bangko ay hindi kailanman hihingi ng iyong OTP sa pamamagitan ng text o tawag. Huwag na huwag itong ibibigay kahit kanino, Lolo at Lola. Ingatan po natin ang ating account.'
+    details: 'Mga Red Flags: May shortened links tulad ng bit.ly o tinyurl. May urgent na banta tulad ng "Ang iyong account ay isu-suspend sa loob ng 24 oras!" Humihingi ng OTP, MPIN, o buong numero ng card. Ano ang dapat gawin: Huwag kailanman mag-click ng links mula sa text messages. Buksan ang inyong banking app nang direkta. Huwag magbahagi ng OTP kahit sabihin pa ng tumatawag na sila ay staff ng bangko.'
   },
   {
     id: '2',
-    title: 'Panloloko sa ATM',
-    description: 'Mga taong nag-aalok ng tulong sa makina ng ATM.',
-    icon: 'fa-credit-card',
-    color: 'bg-emerald-600',
-    details: 'Huwag pong papayag na ibang tao ang humawak ng inyong ATM card. Kung kailangan niyo po ng tulong, mas mainam na lumapit lamang sa guwardiya o sa loob mismo ng bangko para sigurado.'
+    title: 'Fake Calls from Government or Banks',
+    description: 'Mga scammer na nagpapanggap na mula sa BSP, AMLC, o fraud department.',
+    icon: 'fa-phone',
+    color: 'bg-red-600',
+    details: 'Mga Red Flags: Ang tumatawag ay nag-pressure sa inyo na kumilos kaagad. Humihingi sila ng sensitive information. May banta ng pag-aresto o pag-freeze ng account. Ano ang dapat gawin: Ibaba kaagad ang telepono. Tawagan ang opisyal na hotline na nakalista sa website ng kumpanya. Tandaan: Ang mga ahensya ng gobyerno ay HINDI humihingi ng OTP.'
   },
   {
     id: '3',
-    title: 'Maling Panalo sa Raffle',
-    description: 'Sinasabing nanalo ka raw kahit wala kang sinalihan.',
-    icon: 'fa-trophy',
-    color: 'bg-yellow-500',
-    details: 'Naku! Kung sinabi nilang nanalo kayo pero kailangang magbayad muna kayo ng pera o fee, sigurado pong panloloko iyan. Burahin na po ang mensahe at huwag nang pansinin.'
+    title: 'Investment & Crypto Scams',
+    description: 'Nangangako ng garantisadong kita at kailangan mag-recruit ng iba.',
+    icon: 'fa-chart-line',
+    color: 'bg-green-600',
+    details: 'Mga Red Flags: Garantisadong kita (halimbawa, "10% weekly"). "Limited slots only." Kailangan mag-recruit ng iba para kumita. Ano ang dapat gawin: Tingnan kung ang kumpanya ay rehistrado sa Securities and Exchange Commission. Mag-ingat sa Facebook o Telegram "investment groups". Kung masyadong maganda para maging totoo, scam yan.'
   },
   {
     id: '4',
-    title: 'Panloloko sa Pag-ibig',
-    description: 'Naghahanap ng karelasyon sa Facebook para makahingi ng pera.',
-    icon: 'fa-heart',
-    color: 'bg-pink-500',
-    details: 'Mag-ingat po sa mga nakikilala sa Facebook na mabilis magsabi ng I love you. Kapag nag-umpisa na silang humingi ng pera para sa emergency o padala, iwas na po kayo, Lolo at Lola.'
+    title: 'Fake Online Sellers',
+    description: 'Sobrang murang presyo sa Facebook o TikTok, walang COD option.',
+    icon: 'fa-shopping-cart',
+    color: 'bg-purple-600',
+    details: 'Mga Red Flags: Sobrang murang presyo (₱15,000 iPhone 15). Walang COD (Cash on Delivery). Bagong page na may kaunting reviews. Ano ang dapat gawin: Piliin ang COD sa platforms tulad ng Shopee o Lazada. Tingnan ang reviews at history ng seller. Iwasan ang direct bank transfers sa personal accounts.'
   },
   {
     id: '5',
-    title: 'Pekeng Alok ng Trabaho',
-    description: 'Trabaho sa bahay na may sobrang laking sahod.',
+    title: 'Job & Task Scams',
+    description: 'Kailangan magbayad ng training fee, nangangako ng ₱5,000-₱10,000 daily.',
     icon: 'fa-briefcase',
     color: 'bg-orange-600',
-    details: 'Maging mapanuri po tayo. Kung kailangan niyo munang magbayad bago makapag-umpisa ng trabaho, paniguradong lolokohin lang kayo nito. Huwag po tayong magpapaloko.'
+    details: 'Mga Red Flags: Kailangan magbayad ng "training" o "activation" fees. Nangangako ng ₱5,000–₱10,000 daily para sa simpleng tasks. Communication lang sa Telegram. Ano ang dapat gawin: Ang lehitimong employers ay HINDI humihingi ng bayad. I-verify ang kumpanya sa opisyal na website o SEC registration. Mag-search online: "Company name + scam Philippines".'
   },
   {
     id: '6',
-    title: 'Pekeng Virus sa CP',
-    description: 'Sinasabing may virus daw ang iyong cellphone.',
-    icon: 'fa-laptop-code',
-    color: 'bg-indigo-600',
-    details: 'Kung may lumabas sa inyong screen na nagsasabing may virus ang inyong cellphone, huwag po kayong maniniwala agad. Huwag din pong magbibigay ng anumang impormasyon sa kanila.'
+    title: 'Romance Scams',
+    description: 'Mabilis magsabi ng I love you, humihingi ng pera para sa emergency.',
+    icon: 'fa-heart',
+    color: 'bg-pink-500',
+    details: 'Mga Red Flags: Mabilis magsabi ng "I love you". Nag-claim na foreign professional (doctor, engineer, sundalo). Biglang humihingi ng pera para sa emergency, customs fees, o travel. Ano ang dapat gawin: Huwag magpadala ng pera sa taong hindi pa nakikita personally. Reverse-image search ang kanilang photos. Mag-ingat kung tumatanggi sila sa video calls.'
+  },
+  {
+    id: '7',
+    title: 'Pekeng Panalo sa Raffle',
+    description: 'Sinasabing nanalo ka kahit wala kang sinalihan, kailangan magbayad ng fee.',
+    icon: 'fa-trophy',
+    color: 'bg-yellow-500',
+    details: 'Mga Red Flags: Sinabi nilang nanalo kayo pero kailangan magbayad muna ng pera o fee. Hindi niyo naalala na sumali sa raffle. Humihingi ng personal information o bank details. Ano ang dapat gawin: Burahin ang mensahe at huwag pansinin. Huwag magbayad ng kahit anong fee. Ang tunay na raffle ay hindi humihingi ng bayad para makuha ang premyo.'
+  },
+  {
+    id: '8',
+    title: 'Pekeng Virus sa Cellphone',
+    description: 'May pop-up na nagsasabing may virus ang phone, kailangan mag-download.',
+    icon: 'fa-virus',
+    color: 'bg-red-500',
+    details: 'Mga Red Flags: May lumabas sa screen na nagsasabing may virus. Nag-pressure na mag-download ng app o mag-click ng link. Humihingi ng access sa inyong phone. Ano ang dapat gawin: Huwag mag-click ng kahit ano. Isara ang browser o app. Huwag mag-download ng kahit anong "antivirus" mula sa pop-up. Gumamit lang ng trusted antivirus apps mula sa Google Play Store.'
   }
 ];
 

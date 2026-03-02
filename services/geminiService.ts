@@ -16,8 +16,6 @@ const clearOldDatabases = async () => {
     const currentVersion = localStorage.getItem(CACHE_VERSION_KEY);
     
     if (currentVersion !== CURRENT_CACHE_VERSION) {
-      console.log('🗑️ Clearing old audio cache versions...');
-      
       // Delete old database versions
       const oldVersions = ['GabayLigtasAudioDBV12', 'GabayLigtasAudioDBV11', 'GabayLigtasAudioDBV10'];
       for (const oldDB of oldVersions) {
@@ -26,14 +24,10 @@ const clearOldDatabases = async () => {
             const deleteRequest = indexedDB.deleteDatabase(oldDB);
             deleteRequest.onsuccess = () => resolve();
             deleteRequest.onerror = () => reject();
-            deleteRequest.onblocked = () => {
-              console.warn(`⚠️ Deletion of ${oldDB} blocked`);
-              resolve(); // Continue anyway
-            };
+            deleteRequest.onblocked = () => resolve(); // Continue anyway
           });
-          console.log(`✅ Deleted old database: ${oldDB}`);
         } catch (error) {
-          console.warn(`⚠️ Could not delete ${oldDB}:`, error);
+          // Silently continue if deletion fails
         }
       }
       
@@ -42,10 +36,9 @@ const clearOldDatabases = async () => {
       
       // Update version
       localStorage.setItem(CACHE_VERSION_KEY, CURRENT_CACHE_VERSION);
-      console.log('✅ Cache cleared and updated to version', CURRENT_CACHE_VERSION);
     }
   } catch (error) {
-    console.error('❌ Error clearing old databases:', error);
+    console.error('Error clearing old databases:', error);
   }
 };
 
@@ -67,7 +60,7 @@ const saveAudioToDB = async (key: string, data: Uint8Array) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).put(data, key);
   } catch (e) {
-    console.warn("Storage Error:", e);
+    // Silently fail - storage is not critical
   }
 };
 
@@ -175,10 +168,8 @@ export const clearAudioCache = async (): Promise<void> => {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     await tx.objectStore(STORE_NAME).clear();
-    
-    console.log('✅ Audio cache cleared successfully');
   } catch (error) {
-    console.error('❌ Failed to clear audio cache:', error);
+    console.error('Failed to clear audio cache:', error);
   }
 };
 
@@ -246,9 +237,7 @@ export const playNotificationSound = (isScam: boolean) => {
 };
 
 export const speakSystem = (text: string) => {
-  console.log('🔊 Using browser speech synthesis fallback');
   if (!('speechSynthesis' in window)) {
-    console.warn('❌ Speech synthesis not supported in this browser');
     return;
   }
   
@@ -259,7 +248,6 @@ export const speakSystem = (text: string) => {
   // Wait for voices to load
   const setVoiceAndSpeak = () => {
     const voices = window.speechSynthesis.getVoices();
-    console.log('🎤 Available voices:', voices.map(v => `${v.name} (${v.lang})`));
     
     // Try to find Filipino/Tagalog voices in order of preference
     const tlVoice = voices.find(v => v.lang.includes('tl-PH')) ||
@@ -271,10 +259,7 @@ export const speakSystem = (text: string) => {
                     voices.find(v => v.lang.includes('en-US'));
     
     if (tlVoice) {
-      console.log('🎤 Selected voice:', tlVoice.name, tlVoice.lang);
       utterance.voice = tlVoice;
-    } else {
-      console.warn('⚠️ No Filipino voice found, using default');
     }
     
     utterance.lang = 'tl-PH';
@@ -282,24 +267,7 @@ export const speakSystem = (text: string) => {
     utterance.pitch = 1.0; // Normal pitch
     utterance.volume = 1.0; // Full volume
     
-    utterance.onstart = () => console.log('🔊 Speech started');
-    utterance.onend = () => console.log('🔊 Speech ended');
-    utterance.onerror = (e) => console.error('❌ Speech error:', e);
-    
-    window.speechSynthesis.speak(utterance);
-  };
-  
-  // Check if voices are already loaded
-  if (window.speechSynthesis.getVoices().length > 0) {
-    setVoiceAndSpeak();
-    utterance.lang = 'tl-PH';
-    utterance.rate = 0.75; // Slower for seniors
-    utterance.pitch = 1.0; // Normal pitch
-    utterance.volume = 1.0; // Full volume
-    
-    utterance.onstart = () => console.log('🔊 Speech started');
-    utterance.onend = () => console.log('🔊 Speech ended');
-    utterance.onerror = (e) => console.error('❌ Speech error:', e);
+    utterance.onerror = (e) => console.error('Speech synthesis error:', e);
     
     window.speechSynthesis.speak(utterance);
   };
@@ -338,11 +306,9 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
         channelData.every(sample => Math.abs(sample) < 0.001); // All near zero
       
       if (isCorrupted) {
-        console.warn('⚠️ Detected corrupted audio in memory cache, regenerating...');
         audioCache.delete(cleanText);
         // Continue to regenerate fresh audio
       } else {
-        console.log('🔊 Playing cached audio');
         const source = ctx.createBufferSource();
         source.buffer = cachedBuffer;
         source.connect(ctx.destination);
@@ -351,7 +317,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
         return;
       }
     } catch (error) {
-      console.error('❌ Failed to play cached audio, regenerating:', error);
+      console.error('Failed to play cached audio:', error);
       audioCache.delete(cleanText);
       // Continue to regenerate
     }
@@ -361,7 +327,6 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
   const storedBytes = await getAudioFromDB(cleanText);
   if (storedBytes) {
     try {
-      console.log('🔊 Checking stored audio from IndexedDB...');
       const audioBuffer = await decodeAudioData(storedBytes, ctx);
       
       // Strict corruption check
@@ -377,11 +342,9 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
         channelData.every(sample => Math.abs(sample) < 0.001); // All near zero
       
       if (isCorrupted) {
-        console.warn('⚠️ Detected corrupted audio in IndexedDB, clearing and regenerating...');
         await clearAudioCache();
         // Continue to generate fresh audio
       } else {
-        console.log('✅ Stored audio is valid, playing...');
         audioCache.set(cleanText, audioBuffer);
         if (myId !== currentSpeechId) return;
         const source = ctx.createBufferSource();
@@ -392,39 +355,31 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
         return;
       }
     } catch (error) {
-      console.error('❌ Failed to decode stored audio, clearing cache and regenerating:', error);
+      console.error('Failed to decode stored audio:', error);
       await clearAudioCache();
       // Continue to generate fresh audio
     }
   }
 
   // Use browser speech synthesis as primary (free, unlimited, offline)
-  console.log('🎤 Using browser speech synthesis...');
   speakSystem(cleanText);
   return;
 };
 
 export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
-  console.log('🔍 Starting analysis for text:', text.substring(0, 50) + '...');
-  
   // Create a unique hash for the full text content
   const textHash = text.split('').reduce((hash, char) => {
     return ((hash << 5) - hash) + char.charCodeAt(0);
   }, 0).toString(36);
   
-  console.log('🔑 Generated hash for text:', textHash);
-  
   // CRITICAL: Skip cache for known problematic gaming scam patterns
   const isKnownGamingScam = /Hi.*9675715673.*claim.*P3097.*play games.*win big prizes.*cutt\.ly/i.test(text);
   const shouldSkipCache = isKnownGamingScam || /play games.*win.*prize.*cutt\.ly|claim.*pesos.*play.*games.*link/i.test(text);
   
-  if (shouldSkipCache) {
-    console.log('🚨 Skipping cache for known gaming scam pattern');
-  } else {
+  if (!shouldSkipCache) {
     // Check cache first using the full text
     const cached = cacheService.getScanResult(text);
     if (cached) {
-      console.log('📱 Using cached analysis result for hash:', textHash);
       return cached;
     }
   }
@@ -508,8 +463,6 @@ RESPONSE RULES:
 RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTagalog (string), actionTagalog (string)`;
 
   try {
-    console.log('🤖 Calling Gemini API...');
-    
     // Use the full text hash for caching instead of just first 50 characters
     const result = await cacheService.cacheApiCall(
       `gemini_analysis_${textHash}`,
@@ -520,11 +473,7 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
           throw new Error('API key not found. Please check your environment variables.');
         }
         
-        console.log('🔑 API key found, initializing Gemini...');
-        
         const ai = new GoogleGenAI({ apiKey });
-        
-        console.log('📤 Sending request to Gemini...');
         
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash", // Using current stable model name
@@ -555,18 +504,14 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
           }
         });
         
-        console.log('📥 Received response from Gemini');
-        
         // Use the correct response structure for the new Google GenAI library
         const responseText = response.text;
-        console.log('📄 Raw response:', responseText);
         
         if (!responseText) {
           throw new Error('Empty response from Gemini API');
         }
         
         const parsedResult = JSON.parse(responseText);
-        console.log('✅ Parsed result:', parsedResult);
         
         // Validate the response structure
         if (typeof parsedResult.isScam !== 'boolean' || 
@@ -583,7 +528,6 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
         
         if ((hasGamingScamPattern && hasShortLink && !parsedResult.isScam) || 
             (isStandaloneShortLink && !parsedResult.isScam)) {
-          console.log('🚨 OVERRIDE: Gemini incorrectly marked suspicious link/scam as safe - correcting!');
           return {
             isScam: true,
             confidence: 0.95,
@@ -602,27 +546,18 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     // Store in scan results cache using full text
     cacheService.storeScanResult(text, result);
     
-    console.log('✅ Analysis completed successfully:', result);
     return result;
     
   } catch (error: any) {
-    console.error('❌ Analysis failed:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      apiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing',
-      geminiApiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing'
-    });
+    console.error('Analysis failed:', error.message);
     
     // Try to get cached result if available, even if expired (using full text hash)
     const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_analysis_${textHash}`);
     if (fallbackCache) {
-      console.log('📱 Using fallback cached result');
       return fallbackCache;
     }
 
     // Enhanced Philippine-specific scam pattern detection
-    console.log('🔍 Performing fallback analysis...');
     
     // Philippine-specific scam indicators
     const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|cutt\.ly|t\.co|short\.link|click here|click this|i-click|pindutin|exclusive link/i.test(text);
@@ -647,13 +582,6 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     // Check for legitimate telco patterns (these reduce scam score)
     const isLegitTelco = /welcome.*ka-tm|globe|smart.*prepaid|sim registration.*free|tm tambayan|official.*telco/i.test(text);
     const isLegitBusiness = /receipt|invoice|order|delivery|shipping|resibo|order number/i.test(text);
-    
-    console.log('🔍 Fallback analysis indicators:', {
-      hasLink, hasOTP, hasUrgency, hasPrize, hasBankTerms, hasPhishing, 
-      hasFakeTransfer, hasInvestment, hasRomanceScam, hasImpersonation, 
-      hasSIMScam, hasIllegalSales, hasGambling, isSuspiciousLink, isKnownScamLink, 
-      isStandaloneLink, isLegitTelco, isLegitBusiness
-    });
     
     // More sophisticated Philippine scam scoring
     let riskScore = 0;
@@ -696,8 +624,6 @@ RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTa
     
     const isScam = riskScore >= 0.5;
     const confidence = Math.min(0.95, Math.max(0.15, riskScore / 2.0));
-    
-    console.log('🔍 Fallback analysis result:', { isScam, confidence, riskScore });
     
     const result = isScam ? {
       isScam: true,
