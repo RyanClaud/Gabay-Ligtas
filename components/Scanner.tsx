@@ -229,9 +229,29 @@ const Scanner: React.FC = () => {
             <button
               onClick={async () => {
                 try {
+                  // Clear audio cache
                   const { clearAudioCache } = await import('../services/geminiService');
                   await clearAudioCache();
-                  alert('✅ Audio cache cleared! Ang lahat ng naka-save na audio ay nabura na.');
+                  
+                  // Also clear old databases
+                  const oldVersions = ['GabayLigtasAudioDBV12', 'GabayLigtasAudioDBV11', 'GabayLigtasAudioDBV10'];
+                  for (const oldDB of oldVersions) {
+                    try {
+                      indexedDB.deleteDatabase(oldDB);
+                    } catch (e) {
+                      console.warn('Could not delete', oldDB);
+                    }
+                  }
+                  
+                  // Clear localStorage cache version
+                  localStorage.removeItem('gabay_ligtas_cache_version');
+                  
+                  alert('✅ Lahat ng audio ay nabura na!\n\nMag-refresh ng page para sa bagong audio.');
+                  
+                  // Auto refresh after 2 seconds
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 2000);
                 } catch (error) {
                   console.error('Failed to clear audio cache:', error);
                   alert('❌ May problema sa pag-clear ng audio cache.');
