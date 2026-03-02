@@ -278,6 +278,25 @@ export const speakSystem = (text: string) => {
     }
     
     utterance.lang = 'tl-PH';
+    utterance.rate = 0.75; // Slower for seniors
+    utterance.pitch = 1.0; // Normal pitch
+    utterance.volume = 1.0; // Full volume
+    
+    utterance.onstart = () => console.log('🔊 Speech started');
+    utterance.onend = () => console.log('🔊 Speech ended');
+    utterance.onerror = (e) => console.error('❌ Speech error:', e);
+    
+    window.speechSynthesis.speak(utterance);
+  };
+  
+  // Check if voices are already loaded
+  if (window.speechSynthesis.getVoices().length > 0) {
+    setVoiceAndSpeak();
+  } else {
+    // Wait for voices to load
+    window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak;
+  }
+};
     utterance.pitch = 1.0; 
     utterance.rate = 0.75; // Slower speed for better elder understanding
     utterance.volume = 0.9;
@@ -383,115 +402,10 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     }
   }
 
-  // Try ElevenLabs TTS first (works reliably)
-  const elevenLabs = getElevenLabsService();
-  if (elevenLabs && navigator.onLine) {
-    try {
-      console.log('🎤 Attempting ElevenLabs TTS...');
-      
-      // Use a Filipino-optimized voice and add Filipino context
-      const filipinoText = `Mga Lolo at Lola, ${cleanText}`;
-      const audioBuffer = await elevenLabs.generateSpeech(
-        filipinoText,
-        FILIPINO_VOICES[1].voice_id, // Bella - warm female voice
-        {
-          stability: 0.6,        // Slightly more stable for seniors
-          similarity_boost: 0.8, // Higher similarity for clearer speech
-          style: 0.1,           // Slight style for more natural speech
-          use_speaker_boost: true
-        }
-      );
-
-      if (myId !== currentSpeechId) return;
-
-      // Create a copy of the ArrayBuffer before using it
-      const audioBufferCopy = audioBuffer.slice(0);
-      
-      // Convert ArrayBuffer to AudioBuffer with error handling
-      let audioData: AudioBuffer;
-      try {
-        audioData = await ctx.decodeAudioData(audioBufferCopy);
-      } catch (decodeError) {
-        console.error('❌ Failed to decode ElevenLabs audio data:', decodeError);
-        throw new Error('Audio decoding failed');
-      }
-      
-      // Cache the audio using original buffer
-      const uint8Array = new Uint8Array(audioBuffer);
-      await saveAudioToDB(cleanText, uint8Array);
-      audioCache.set(cleanText, audioData);
-
-      // Play the audio
-      console.log('✅ ElevenLabs TTS successful, playing audio');
-      const source = ctx.createBufferSource();
-      source.buffer = audioData;
-      source.connect(ctx.destination);
-      activeSources.add(source);
-      source.start(0);
-      return;
-
-    } catch (error: any) {
-      console.error('❌ ElevenLabs TTS failed:', error.message);
-      // Continue to Gemini TTS fallback
-    }
-  }
-
-  // Fallback to Gemini TTS if ElevenLabs fails
-  if (checkQuotaStatus()) {
-    console.log('⚠️ TTS quota locked, using browser speech synthesis');
-    speakSystem(cleanText);
-    return;
-  }
-  
-  if (!navigator.onLine) {
-    console.log('⚠️ Offline, using browser speech synthesis');
-    speakSystem(cleanText);
-    return;
-  }
-
-  try {
-    console.log('🤖 Attempting Gemini TTS as fallback...');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ 
-        parts: [{ 
-          text: `Persona: Isang mapagmahal na Filipinang apo na nakikipag-usap nang mahinahon, malinaw, at MABAGAL sa kanyang Lolo at Lola. Gamit ang natural na punto at dahan-dahang cadence ng Tagalog, bigkasin ito: "${cleanText}"` 
-        }] 
-      }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-      },
-    });
-
-    if (myId !== currentSpeechId) return;
-
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      console.log('✅ Gemini TTS successful, playing audio');
-      const rawBytes = decode(base64Audio);
-      await saveAudioToDB(cleanText, rawBytes);
-      const audioBuffer = await decodeAudioData(rawBytes, ctx);
-      audioCache.set(cleanText, audioBuffer);
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-      activeSources.add(source);
-      source.start(0);
-    } else {
-      console.warn('⚠️ Gemini TTS returned no audio data, falling back to browser speech');
-      speakSystem(cleanText);
-    }
-  } catch (error: any) {
-    console.error('❌ Gemini TTS failed:', error.message);
-    if (error.message?.includes('429')) {
-      console.warn('⚠️ TTS quota exceeded, setting lock');
-      setQuotaLock();
-    }
-    console.log('🔄 Falling back to browser speech synthesis');
-    speakSystem(cleanText);
-  }
+  // Use browser speech synthesis as primary (free, unlimited, offline)
+  console.log('🎤 Using browser speech synthesis...');
+  speakSystem(cleanText);
+  return;
 };
 
 export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
