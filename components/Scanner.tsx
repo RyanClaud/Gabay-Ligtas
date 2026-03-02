@@ -225,6 +225,23 @@ const Scanner: React.FC = () => {
               <i className="fa-solid fa-eraser"></i>
               BURAHIN ANG DETALYE
             </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  const { clearAudioCache } = await import('../services/geminiService');
+                  await clearAudioCache();
+                  alert('✅ Audio cache cleared! Ang lahat ng naka-save na audio ay nabura na.');
+                } catch (error) {
+                  console.error('Failed to clear audio cache:', error);
+                  alert('❌ May problema sa pag-clear ng audio cache.');
+                }
+              }}
+              className="py-3 sm:py-4 rounded-[1.5rem] sm:rounded-[2rem] text-sm sm:text-base font-black text-orange-600 bg-orange-50 border-4 border-orange-200 flex items-center justify-center gap-2 active:scale-95 active:bg-orange-100 transition-all"
+            >
+              <i className="fa-solid fa-volume-xmark"></i>
+              BURAHIN ANG AUDIO
+            </button>
           </div>
         </div>
 

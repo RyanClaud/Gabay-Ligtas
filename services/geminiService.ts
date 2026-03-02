@@ -4,9 +4,9 @@ import { ScamAnalysis } from "../types";
 import { cacheService } from "./cacheService";
 import { getElevenLabsService, FILIPINO_VOICES } from "./elevenLabsService";
 
-const DB_NAME = 'GabayLigtasAudioDBV12'; // Incremented version for new voice speed
+const DB_NAME = 'GabayLigtasAudioDBV13'; // Incremented version to clear corrupted audio
 const STORE_NAME = 'audio_cache';
-const QUOTA_LOCK_KEY = 'gabay_ligtas_quota_lock_v12';
+const QUOTA_LOCK_KEY = 'gabay_ligtas_quota_lock_v13';
 
 const openDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -264,20 +264,65 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
   // Check cache first
   if (audioCache.has(cleanText)) {
     console.log('🔊 Playing cached audio');
-    const source = ctx.createBufferSource();
-    source.buffer = audioCache.get(cleanText)!;
-    source.connect(ctx.destination);
-    activeSources.add(source);
-    source.start(0);
-    return;
+    try {
+      const cachedBuffer = audioCache.get(cleanText)!;
+      
+      // Check if cached audio is corrupted
+      const channelData = cachedBuffer.getChannelData(0);
+      const isCorrupted = cachedBuffer.duration < 0.1 || 
+                         channelData.every(sample => Math.abs(sample) < 0.001);
+      
+      if (isCorrupted) {
+        console.warn('⚠️ Detected corrupted audio in memory cache, clearing...');
+        audioCache.delete(cleanText);
+        // Continue to check IndexedDB or regenerate
+      } else {
+        const source = ctx.createBufferSource();
+        source.buffer = cachedBuffer;
+        source.connect(ctx.destination);
+        activeSources.add(source);
+        source.start(0);
+        return;
+      }
+    } catch (error) {
+      console.error('❌ Failed to play cached audio:', error);
+      audioCache.delete(cleanText);
+      // Continue to check IndexedDB or regenerate
+    }
   }
 
   // Check IndexedDB cache
   const storedBytes = await getAudioFromDB(cleanText);
   if (storedBytes) {
     console.log('🔊 Playing stored audio from IndexedDB');
-    const audioBuffer = await decodeAudioData(storedBytes, ctx);
-    audioCache.set(cleanText, audioBuffer);
+    try {
+      const audioBuffer = await decodeAudioData(storedBytes, ctx);
+      
+      // Check if audio is corrupted (all zeros or very short)
+      const channelData = audioBuffer.getChannelData(0);
+      const isCorrupted = audioBuffer.duration < 0.1 || 
+                         channelData.every(sample => Math.abs(sample) < 0.001);
+      
+      if (isCorrupted) {
+        console.warn('⚠️ Detected corrupted audio in cache, clearing and regenerating...');
+        await clearAudioCache();
+        // Don't return, continue to generate fresh audio
+      } else {
+        audioCache.set(cleanText, audioBuffer);
+        if (myId !== currentSpeechId) return;
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        activeSources.add(source);
+        source.start(0);
+        return;
+      }
+    } catch (error) {
+      console.error('❌ Failed to decode stored audio, clearing cache:', error);
+      await clearAudioCache();
+      // Continue to generate fresh audio
+    }
+  }
     if (myId !== currentSpeechId) return;
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
