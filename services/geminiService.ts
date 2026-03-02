@@ -323,14 +323,6 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
       // Continue to generate fresh audio
     }
   }
-    if (myId !== currentSpeechId) return;
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(ctx.destination);
-    activeSources.add(source);
-    source.start(0);
-    return;
-  }
 
   // Try ElevenLabs TTS first (works reliably)
   const elevenLabs = getElevenLabsService();
