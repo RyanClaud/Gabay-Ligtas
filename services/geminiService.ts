@@ -180,8 +180,18 @@ export const speakSystem = (text: string) => {
 };
 
 const ELEVENLABS_QUOTA_KEY = 'elevenlabs_quota_exceeded_until';
+const ELEVENLABS_KEY_HASH = 'elevenlabs_key_hash';
 
 const isElevenLabsQuotaExceeded = (): boolean => {
+  // If the API key changed, clear the quota lock
+  const currentKey = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
+  const storedHash = localStorage.getItem(ELEVENLABS_KEY_HASH);
+  const currentHash = currentKey.slice(-8); // last 8 chars as simple hash
+  if (storedHash !== currentHash) {
+    localStorage.removeItem(ELEVENLABS_QUOTA_KEY);
+    localStorage.setItem(ELEVENLABS_KEY_HASH, currentHash);
+    return false;
+  }
   const until = localStorage.getItem(ELEVENLABS_QUOTA_KEY);
   if (!until) return false;
   if (Date.now() > parseInt(until, 10)) {
