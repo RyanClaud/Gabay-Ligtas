@@ -1,40 +1,34 @@
-
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { ScamAnalysis } from "../types";
 import { cacheService } from "./cacheService";
-import { getElevenLabsService, FILIPINO_VOICES } from "./elevenLabsService";
 
-const DB_NAME = 'GabayLigtasAudioDBV13'; // Incremented version to clear corrupted audio
+const DB_NAME = 'GabayLigtasAudioDBV13';
 const STORE_NAME = 'audio_cache';
 const QUOTA_LOCK_KEY = 'gabay_ligtas_quota_lock_v13';
 const CACHE_VERSION_KEY = 'gabay_ligtas_cache_version';
 const CURRENT_CACHE_VERSION = '13';
 
-// Clear old database versions on startup
+const audioCache = new Map<string, AudioBuffer>();
+let audioCtx: AudioContext | null = null;
+const activeSources = new Set<AudioBufferSourceNode>();
+let currentSpeechId = 0;
+
 const clearOldDatabases = async () => {
   try {
     const currentVersion = localStorage.getItem(CACHE_VERSION_KEY);
-    
     if (currentVersion !== CURRENT_CACHE_VERSION) {
-      // Delete old database versions
       const oldVersions = ['GabayLigtasAudioDBV12', 'GabayLigtasAudioDBV11', 'GabayLigtasAudioDBV10'];
       for (const oldDB of oldVersions) {
         try {
-          await new Promise<void>((resolve, reject) => {
-            const deleteRequest = indexedDB.deleteDatabase(oldDB);
-            deleteRequest.onsuccess = () => resolve();
-            deleteRequest.onerror = () => reject();
-            deleteRequest.onblocked = () => resolve(); // Continue anyway
+          await new Promise<void>((resolve) => {
+            const req = indexedDB.deleteDatabase(oldDB);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
           });
-        } catch (error) {
-          // Silently continue if deletion fails
-        }
+        } catch { /* continue */ }
       }
-      
-      // Clear memory cache
       audioCache.clear();
-      
-      // Update version
       localStorage.setItem(CACHE_VERSION_KEY, CURRENT_CACHE_VERSION);
     }
   } catch (error) {
@@ -42,27 +36,15 @@ const clearOldDatabases = async () => {
   }
 };
 
-// Run cleanup on module load
 clearOldDatabases();
 
-const openDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
+const openDB = (): Promise<IDBDatabase> =>
+  new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-};
-
-const saveAudioToDB = async (key: string, data: Uint8Array) => {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(data, key);
-  } catch (e) {
-    // Silently fail - storage is not critical
-  }
-};
 
 const getAudioFromDB = async (key: string): Promise<Uint8Array | null> => {
   try {
@@ -72,48 +54,23 @@ const getAudioFromDB = async (key: string): Promise<Uint8Array | null> => {
       request.onsuccess = () => resolve(request.result || null);
       request.onerror = () => resolve(null);
     });
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 };
-
-const audioCache = new Map<string, AudioBuffer>();
-let audioCtx: AudioContext | null = null;
-const activeSources = new Set<AudioBufferSourceNode>();
-let currentSpeechId = 0;
 
 const normalizePhonetic = (text: string): string => {
   const replacements: Record<string, string> = {
-    'scam': 'is-kam',
-    'Scam': 'Iskam',
-    'link': 'lingk',
-    'OTP': 'O-T-P',
-    'password': 'pas-word',
-    'MPIN': 'M-pin',
-    'online': 'on-layn',
-    'checker': 'che-ker',
-    'raffle': 'ra-pol',
-    'click': 'pindutin',
-    'message': 'men-sa-he',
-    'bank': 'bang-ko',
-    'suspended': 'na-sus-pend',
-    'verification': 'ber-i-pi-kay-shon',
-    'GCash': 'Dyi-Kash',
-    'virus': 'bay-rus',
-    'Facebook': 'Peys-buk',
-    'emergency': 'e-mer-dyen-si',
-    'code': 'kod',
-    'download': 'dawn-lowd',
-    'update': 'ap-deyt',
-    'account': 'a-ka-unt',
-    'security': 'se-kyu-ri-ti',
-    'number': 'num-be-ro'
+    'scam': 'is-kam', 'Scam': 'Iskam', 'link': 'lingk', 'OTP': 'O-T-P',
+    'password': 'pas-word', 'MPIN': 'M-pin', 'online': 'on-layn',
+    'checker': 'che-ker', 'raffle': 'ra-pol', 'click': 'pindutin',
+    'message': 'men-sa-he', 'bank': 'bang-ko', 'suspended': 'na-sus-pend',
+    'verification': 'ber-i-pi-kay-shon', 'GCash': 'Dyi-Kash', 'virus': 'bay-rus',
+    'Facebook': 'Peys-buk', 'emergency': 'e-mer-dyen-si', 'code': 'kod',
+    'download': 'dawn-lowd', 'update': 'ap-deyt', 'account': 'a-ka-unt',
+    'security': 'se-kyu-ri-ti', 'number': 'num-be-ro',
   };
-
   let normalized = text;
   Object.entries(replacements).forEach(([key, val]) => {
-    const regex = new RegExp(`\\b${key}\\b`, 'gi');
-    normalized = normalized.replace(regex, val);
+    normalized = normalized.replace(new RegExp(`\\b${key}\\b`, 'gi'), val);
   });
   return normalized;
 };
@@ -122,15 +79,8 @@ export const checkQuotaStatus = (): boolean => {
   const lock = localStorage.getItem(QUOTA_LOCK_KEY);
   if (!lock) return false;
   const expiry = parseInt(lock, 10);
-  if (Date.now() > expiry) {
-    localStorage.removeItem(QUOTA_LOCK_KEY);
-    return false;
-  }
+  if (Date.now() > expiry) { localStorage.removeItem(QUOTA_LOCK_KEY); return false; }
   return true;
-};
-
-const setQuotaLock = () => {
-  localStorage.setItem(QUOTA_LOCK_KEY, (Date.now() + 15 * 60 * 1000).toString());
 };
 
 export function getAudioContext() {
@@ -142,38 +92,22 @@ export function getAudioContext() {
 
 export const stopVoice = () => {
   currentSpeechId++;
-  activeSources.forEach((source) => {
-    try { source.stop(); } catch (e) {}
-  });
+  activeSources.forEach((s) => { try { s.stop(); } catch { /* ignore */ } });
   activeSources.clear();
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 };
 
-function decode(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-  return bytes;
-}
-
-/**
- * Clear all cached audio (useful if audio is corrupted)
- */
 export const clearAudioCache = async (): Promise<void> => {
   try {
-    // Clear memory cache
     audioCache.clear();
-    
-    // Clear IndexedDB cache
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    await tx.objectStore(STORE_NAME).clear();
+    tx.objectStore(STORE_NAME).clear();
   } catch (error) {
     console.error('Failed to clear audio cache:', error);
   }
 };
 
-// Make clearAudioCache available globally for debugging
 if (typeof window !== 'undefined') {
   (window as any).clearAudioCache = clearAudioCache;
 }
@@ -186,97 +120,60 @@ async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<Aud
   return buffer;
 }
 
-/**
- * Plays a notification sound for scam/safe results
- */
 export const playNotificationSound = (isScam: boolean) => {
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') ctx.resume();
-
   const now = ctx.currentTime;
-  
   if (isScam) {
-    // Alert Sound (Square Wave for grit, descending frequency)
     const playBeep = (time: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
       osc.type = 'square';
       osc.frequency.setValueAtTime(200, time);
       osc.frequency.exponentialRampToValueAtTime(100, time + 0.15);
-      
       gain.gain.setValueAtTime(0.1, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
-      
-      osc.start(time);
-      osc.stop(time + 0.15);
+      osc.start(time); osc.stop(time + 0.15);
     };
-    
-    playBeep(now);
-    playBeep(now + 0.2); // Double beep for danger
+    playBeep(now); playBeep(now + 0.2);
   } else {
-    // Success Sound (Sine Wave for softness, ascending)
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(600, now);
     osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
     osc.frequency.exponentialRampToValueAtTime(1600, now + 0.3);
-    
     gain.gain.setValueAtTime(0.15, now);
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-    
-    osc.start(now);
-    osc.stop(now + 0.4);
+    osc.start(now); osc.stop(now + 0.4);
   }
 };
 
 export const speakSystem = (text: string) => {
-  if (!('speechSynthesis' in window)) {
-    return;
-  }
-  
+  if (!('speechSynthesis' in window)) return;
   stopVoice();
-  const processed = normalizePhonetic(text);
-  const utterance = new SpeechSynthesisUtterance(processed);
-  
-  // Wait for voices to load
+  const utterance = new SpeechSynthesisUtterance(normalizePhonetic(text));
   const setVoiceAndSpeak = () => {
     const voices = window.speechSynthesis.getVoices();
-    
-    // Try to find Filipino/Tagalog voices in order of preference
-    const tlVoice = voices.find(v => v.lang.includes('tl-PH')) ||
-                    voices.find(v => v.lang.includes('tl')) ||
-                    voices.find(v => v.lang.includes('fil')) ||
-                    voices.find(v => v.name.toLowerCase().includes('filipino')) ||
-                    voices.find(v => v.name.toLowerCase().includes('tagalog')) ||
-                    voices.find(v => v.name.toLowerCase().includes('google') && v.lang.includes('en-US')) ||
-                    voices.find(v => v.lang.includes('en-US'));
-    
-    if (tlVoice) {
-      utterance.voice = tlVoice;
-    }
-    
+    const tlVoice =
+      voices.find(v => v.lang.includes('tl-PH')) ||
+      voices.find(v => v.lang.includes('tl')) ||
+      voices.find(v => v.lang.includes('fil')) ||
+      voices.find(v => v.name.toLowerCase().includes('filipino')) ||
+      voices.find(v => v.name.toLowerCase().includes('tagalog')) ||
+      voices.find(v => v.name.toLowerCase().includes('google') && v.lang.includes('en-US')) ||
+      voices.find(v => v.lang.includes('en-US'));
+    if (tlVoice) utterance.voice = tlVoice;
     utterance.lang = 'tl-PH';
-    utterance.rate = 0.75; // Slower for seniors
-    utterance.pitch = 1.0; // Normal pitch
-    utterance.volume = 1.0; // Full volume
-    
+    utterance.rate = 0.75;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
     utterance.onerror = (e) => console.error('Speech synthesis error:', e);
-    
     window.speechSynthesis.speak(utterance);
   };
-  
-  // Check if voices are already loaded
   if (window.speechSynthesis.getVoices().length > 0) {
     setVoiceAndSpeak();
   } else {
-    // Wait for voices to load
     window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak;
   }
 };
@@ -285,363 +182,319 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
   const myId = ++currentSpeechId;
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
-
   const cleanText = text.trim();
 
-  // Check cache first
   if (audioCache.has(cleanText)) {
     try {
-      const cachedBuffer = audioCache.get(cleanText)!;
-      
-      // Strict corruption check
-      const channelData = cachedBuffer.getChannelData(0);
-      const avgAmplitude = channelData.reduce((sum, val) => sum + Math.abs(val), 0) / channelData.length;
-      const maxAmplitude = Math.max(...Array.from(channelData).map(Math.abs));
-      
-      // Check multiple corruption indicators
-      const isCorrupted = 
-        cachedBuffer.duration < 0.5 || // Too short
-        avgAmplitude < 0.001 || // Too quiet (likely bzzzz)
-        maxAmplitude < 0.01 || // No real audio peaks
-        channelData.every(sample => Math.abs(sample) < 0.001); // All near zero
-      
-      if (isCorrupted) {
-        audioCache.delete(cleanText);
-        // Continue to regenerate fresh audio
-      } else {
-        const source = ctx.createBufferSource();
-        source.buffer = cachedBuffer;
-        source.connect(ctx.destination);
-        activeSources.add(source);
-        source.start(0);
-        return;
+      const buf = audioCache.get(cleanText)!;
+      const ch = buf.getChannelData(0);
+      const avg = ch.reduce((s, v) => s + Math.abs(v), 0) / ch.length;
+      const max = Math.max(...Array.from(ch).map(Math.abs));
+      const corrupted = buf.duration < 0.5 || avg < 0.001 || max < 0.01 || ch.every(s => Math.abs(s) < 0.001);
+      if (corrupted) { audioCache.delete(cleanText); }
+      else {
+        const src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination);
+        activeSources.add(src); src.start(0); return;
       }
     } catch (error) {
       console.error('Failed to play cached audio:', error);
       audioCache.delete(cleanText);
-      // Continue to regenerate
     }
   }
 
-  // Check IndexedDB cache
   const storedBytes = await getAudioFromDB(cleanText);
   if (storedBytes) {
     try {
-      const audioBuffer = await decodeAudioData(storedBytes, ctx);
-      
-      // Strict corruption check
-      const channelData = audioBuffer.getChannelData(0);
-      const avgAmplitude = channelData.reduce((sum, val) => sum + Math.abs(val), 0) / channelData.length;
-      const maxAmplitude = Math.max(...Array.from(channelData).map(Math.abs));
-      
-      // Check multiple corruption indicators
-      const isCorrupted = 
-        audioBuffer.duration < 0.5 || // Too short
-        avgAmplitude < 0.001 || // Too quiet (likely bzzzz)
-        maxAmplitude < 0.01 || // No real audio peaks
-        channelData.every(sample => Math.abs(sample) < 0.001); // All near zero
-      
-      if (isCorrupted) {
-        await clearAudioCache();
-        // Continue to generate fresh audio
-      } else {
-        audioCache.set(cleanText, audioBuffer);
+      const buf = await decodeAudioData(storedBytes, ctx);
+      const ch = buf.getChannelData(0);
+      const avg = ch.reduce((s, v) => s + Math.abs(v), 0) / ch.length;
+      const max = Math.max(...Array.from(ch).map(Math.abs));
+      const corrupted = buf.duration < 0.5 || avg < 0.001 || max < 0.01 || ch.every(s => Math.abs(s) < 0.001);
+      if (corrupted) { await clearAudioCache(); }
+      else {
+        audioCache.set(cleanText, buf);
         if (myId !== currentSpeechId) return;
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(ctx.destination);
-        activeSources.add(source);
-        source.start(0);
-        return;
+        const src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination);
+        activeSources.add(src); src.start(0); return;
       }
     } catch (error) {
       console.error('Failed to decode stored audio:', error);
       await clearAudioCache();
-      // Continue to generate fresh audio
     }
   }
 
-  // Use browser speech synthesis as primary (free, unlimited, offline)
   speakSystem(cleanText);
-  return;
 };
 
-export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
-  // Create a unique hash for the full text content
-  const textHash = text.split('').reduce((hash, char) => {
-    return ((hash << 5) - hash) + char.charCodeAt(0);
-  }, 0).toString(36);
-  
-  // CRITICAL: Skip cache for known problematic gaming scam patterns
-  const isKnownGamingScam = /Hi.*9675715673.*claim.*P3097.*play games.*win big prizes.*cutt\.ly/i.test(text);
-  const shouldSkipCache = isKnownGamingScam || /play games.*win.*prize.*cutt\.ly|claim.*pesos.*play.*games.*link/i.test(text);
-  
-  if (!shouldSkipCache) {
-    // Check cache first using the full text
-    const cached = cacheService.getScanResult(text);
-    if (cached) {
-      return cached;
-    }
+// ---------------------------------------------------------------------------
+// Pre-screening layer — runs BEFORE Gemini to maximise Recall.
+// Tier 1: single high-precision signals → immediate scam verdict.
+// Tier 2: two-signal combinations → high-confidence scam verdict.
+// ---------------------------------------------------------------------------
+interface PreScreenResult {
+  isDefiniteScam: boolean;
+  confidence: number;
+}
+
+const preScreenScam = (text: string): PreScreenResult => {
+  const t = text.toLowerCase();
+
+  // Tier 1 — single absolute signals
+  if (/^https?:\/\/(bit\.ly|cutt\.ly|tinyurl\.com|rb\.gy|is\.gd|v\.gd|t\.co|short\.link|ow\.ly|goo\.gl|tiny\.cc|lnkd\.in)\/\S+$/i.test(text.trim()))
+    return { isDefiniteScam: true, confidence: 0.97 };
+
+  if (/\b(otp|one.time.pin|one.time.password|mpin|passcode)\b/i.test(t) &&
+      /\b(send|ibigay|ibahagi|share|enter|ilagay|i-type|type)\b/i.test(t))
+    return { isDefiniteScam: true, confidence: 0.97 };
+
+  if (/natanggap|nakatanggap|received|na-credit/i.test(t) &&
+      /₱|php|piso|pesos/i.test(t) &&
+      /https?:\/\/|bit\.ly|cutt\.ly|click|i-click|claim/i.test(t))
+    return { isDefiniteScam: true, confidence: 0.97 };
+
+  if (/\b(guaranteed|garantisado|siguradong)\b/i.test(t) &&
+      /\b(kita|profit|return|tubo|pera|income|earnings)\b/i.test(t) &&
+      /\b(araw-araw|daily|weekly|lingguhan|bawat araw|per day|bawat linggo)\b/i.test(t))
+    return { isDefiniteScam: true, confidence: 0.96 };
+
+  if (/\b(bayad|bayaran|magbayad|pay|payment|fee|deposit)\b/i.test(t) &&
+      /\b(activation|training|registration|slot|membership)\b/i.test(t) &&
+      /\b(trabaho|job|work|kita|earn|kumita)\b/i.test(t))
+    return { isDefiniteScam: true, confidence: 0.96 };
+
+  // Tier 2 — two-signal combinations
+  const hasShortUrl    = /bit\.ly|cutt\.ly|tinyurl|rb\.gy|is\.gd|v\.gd|ow\.ly|goo\.gl|tiny\.cc/i.test(t);
+  const hasMoneyOffer  = /₱|php|piso|pesos|\$|libre|free|nanalo|won|prize|premyo|reward|bonus|kita|kumita|earn/i.test(t);
+  const hasUrgency     = /urgent|agad|ngayon|now|limited|mabilis|asap|immediately|kaagad|bilisan|hurry|deadline|expire/i.test(t);
+  const hasCred        = /otp|mpin|pin|password|passcode|cvv|account number|card number/i.test(t);
+  const hasBankBrand   = /gcash|maya|paymaya|bpi|bdo|metrobank|landbank|unionbank|pnb|rcbc|eastwest|security bank/i.test(t);
+  const hasGovBrand    = /bsp|bangko sentral|amlc|nbi|pnp|dti|bir|sss|gsis|philhealth|pagibig|pag-ibig/i.test(t);
+  const hasLink        = /https?:\/\/|www\./i.test(t);
+  const hasPrize       = /nanalo|won|winner|congratulations|premyo|prize|raffle|reward|jackpot/i.test(t);
+  const hasJobOffer    = /trabaho|job offer|hiring|work from home|part.?time|full.?time|kumita ng/i.test(t);
+  const hasRomance     = /mahal kita|i love you|miss you|foreign|abroad|soldier|doctor.*money|engineer.*money/i.test(t);
+  const hasMoneyReq    = /magpadala|send money|padala|transfer|gcash mo|maya mo|bayad|utang|pautang|loan/i.test(t);
+  const hasCrypto      = /crypto|bitcoin|btc|ethereum|eth|usdt|binance|trading|invest/i.test(t);
+  const hasBadAccount  = /selling.*account|selling.*sim|verified.*account|registered.*sim|buy.*account/i.test(t);
+
+  if (hasShortUrl && hasMoneyOffer)          return { isDefiniteScam: true, confidence: 0.95 };
+  if (hasShortUrl && hasUrgency)             return { isDefiniteScam: true, confidence: 0.94 };
+  if (hasBankBrand && hasCred)               return { isDefiniteScam: true, confidence: 0.96 };
+  if (hasGovBrand && (hasCred || (hasLink && hasUrgency))) return { isDefiniteScam: true, confidence: 0.95 };
+  if (hasPrize && hasLink)                   return { isDefiniteScam: true, confidence: 0.93 };
+  if (hasPrize && hasMoneyReq)               return { isDefiniteScam: true, confidence: 0.95 };
+  if (hasJobOffer && hasMoneyReq)            return { isDefiniteScam: true, confidence: 0.94 };
+  if (hasRomance && hasMoneyReq)             return { isDefiniteScam: true, confidence: 0.94 };
+  if (hasCrypto && hasMoneyOffer && hasUrgency) return { isDefiniteScam: true, confidence: 0.93 };
+  if (hasBadAccount)                         return { isDefiniteScam: true, confidence: 0.93 };
+  if (hasBankBrand && hasLink && hasUrgency) return { isDefiniteScam: true, confidence: 0.94 };
+
+  return { isDefiniteScam: false, confidence: 0 };
+};
+
+// ---------------------------------------------------------------------------
+// Fallback scorer — used when Gemini is unavailable.
+// Uses β=2 F-score logic: Recall is weighted 2× over Precision.
+// Decision threshold = 0.35 (lower than 0.5) to minimise false negatives.
+// ---------------------------------------------------------------------------
+const fallbackScorer = (text: string): ScamAnalysis => {
+  const pre = preScreenScam(text);
+  if (pre.isDefiniteScam) {
+    return {
+      isScam: true,
+      confidence: pre.confidence,
+      reasonTagalog: 'Lolo at Lola, natuklasan po namin ang isang mapanganib na pattern sa mensaheng ito na karaniwang ginagamit ng mga manloloko sa Pilipinas.',
+      actionTagalog: 'Huwag po mag-click, mag-reply, o magbigay ng personal na impormasyon. I-delete na po agad ito.',
+    };
   }
 
-  // Enhanced system instruction with Philippine-specific scam knowledge
-  const systemInstruction = `You are "Apo", a caring, respectful, and expert Cyber-Guardian for Filipino Senior Citizens. 
-Your goal is to analyze messages accurately and explain risks in natural, conversational Tagalog.
+  const t = text.toLowerCase();
 
-PHILIPPINE CYBERCRIME SCAM PATTERNS TO DETECT:
+  const features: Array<{ hit: boolean; weight: number }> = [
+    { hit: /https?:\/\/|www\./i.test(t),                                              weight: 0.25 },
+    { hit: /bit\.ly|cutt\.ly|tinyurl|rb\.gy|is\.gd|ow\.ly/i.test(t),                 weight: 0.45 },
+    { hit: /\botp\b|\bmpin\b|\bpin\b|\bpassword\b|\bcvv\b/i.test(t),                  weight: 0.40 },
+    { hit: /gcash|maya|paymaya/i.test(t),                                              weight: 0.20 },
+    { hit: /bpi|bdo|metrobank|landbank|unionbank/i.test(t),                            weight: 0.20 },
+    { hit: /₱|php|piso|pesos/i.test(t),                                                weight: 0.15 },
+    { hit: /urgent|agad|ngayon na|kaagad|bilisan|hurry|asap|deadline|expire/i.test(t), weight: 0.20 },
+    { hit: /nanalo|won|winner|premyo|prize|raffle|jackpot|congratulations/i.test(t),   weight: 0.30 },
+    { hit: /libre|free|bonus|reward|gift|regalo/i.test(t),                             weight: 0.15 },
+    { hit: /invest|crypto|bitcoin|trading|siguradong.*kita|garantisadong.*kita/i.test(t), weight: 0.35 },
+    { hit: /trabaho|job offer|hiring|work from home|kumita ng/i.test(t),               weight: 0.15 },
+    { hit: /bayad.*activation|bayad.*training|bayad.*registration/i.test(t),           weight: 0.45 },
+    { hit: /mahal kita|i love you|foreign.*money|abroad.*padala/i.test(t),             weight: 0.30 },
+    { hit: /i-click|pindutin.*link|click.*link|tap.*link/i.test(t),                    weight: 0.25 },
+    { hit: /i-download|mag-download|install/i.test(t),                                 weight: 0.20 },
+    { hit: /mag-login|i-login|sign in|log in/i.test(t),                                weight: 0.20 },
+    { hit: /suspended|na-suspend|i-freeze|frozen|blocked|na-block/i.test(t),           weight: 0.25 },
+    { hit: /bsp|bangko sentral|amlc|nbi|pnp|dti|bir/i.test(t),                        weight: 0.20 },
+  ];
 
-1. PHISHING & SPOOFING:
-   - Fake bank/government SMS with suspicious links
-   - Requests for OTP, PIN, MPIN, passwords
-   - Messages claiming account suspension/verification needed
-   - Vishing attempts asking to "update" account details
+  const legitDiscounts: Array<{ hit: boolean; discount: number }> = [
+    { hit: /welcome.*ka-tm|tm tambayan|globe.*sim|smart.*sim/i.test(t),                discount: 0.35 },
+    { hit: /resibo|receipt|order number|tracking number|delivery/i.test(t),            discount: 0.30 },
+    { hit: /official.*website|opisyal.*website|pumunta.*app/i.test(t),                 discount: 0.25 },
+    { hit: /^(ok|sige|salamat|oo|hindi|huwag|mahal kita|kumain ka na|ingat)\b/i.test(t.trim()), discount: 0.50 },
+  ];
 
-2. CONSUMER FRAUD:
-   - Fake online stores on social media
-   - Too-good-to-be-true product offers
-   - Requests for GCash/Maya payments upfront
-   - Non-delivery scams
+  let score = features.reduce((s, f) => s + (f.hit ? f.weight : 0), 0);
+  score -= legitDiscounts.reduce((s, d) => s + (d.hit ? d.discount : 0), 0);
 
-3. INVESTMENT SCAMS:
-   - Cryptocurrency investment offers
-   - High-return investment promises
-   - Advance fee scams (pay fees to claim prizes)
-   - "Limited time" investment opportunities
+  // Combination bonuses
+  const hasLink    = /https?:\/\/|www\./i.test(t);
+  const hasPrize   = /nanalo|won|winner|premyo|prize|raffle/i.test(t);
+  const hasUrgency = /urgent|agad|ngayon na|kaagad|bilisan|hurry|asap/i.test(t);
+  const hasCred    = /otp|mpin|pin|password|cvv/i.test(t);
+  const hasBank    = /gcash|maya|bpi|bdo|metrobank|landbank/i.test(t);
 
-4. IDENTITY THEFT:
-   - Family/friend impersonation claiming emergencies
-   - Requests for urgent money transfers
-   - Deepfake or account takeover attempts
-   - Illegal SIM/e-wallet account offers
+  if (hasLink && hasPrize)   score += 0.30;
+  if (hasLink && hasUrgency) score += 0.25;
+  if (hasCred && hasBank)    score += 0.40;
+  if (hasPrize && hasUrgency) score += 0.20;
 
-5. ROMANCE SCAMS:
-   - Long-term relationship building
-   - Requests for money for "travel" or "emergencies"
-   - Investment opportunities from romantic interests
+  score = Math.max(0, score);
 
-6. GAMING/GAMBLING SCAMS:
-   - Messages offering money to play games
-   - Prize claims for gaming or gambling
-   - Links to gaming sites with money offers
-   - "Win big prizes" with suspicious links
+  // β=2 F-score threshold: favour Recall over Precision
+  const THRESHOLD = 0.35;
+  const isScam = score >= THRESHOLD;
+  const confidence = isScam
+    ? Math.min(0.95, 0.55 + (score - THRESHOLD) * 0.5)
+    : Math.max(0.60, 0.90 - score * 0.8);
 
-CRITICAL SCAM INDICATORS:
-- Any message with shortened URLs (bit.ly, cutt.ly, t.co, etc.) + money offers = HIGH RISK
-- STANDALONE SUSPICIOUS LINKS = HIGH RISK (especially URL shorteners)
-- Gaming/gambling offers with links = HIGH RISK  
-- Prize claims with external links = HIGH RISK
-- Money offers from unknown sources = HIGH RISK
-- Isolated shortened URLs without context = VERY HIGH RISK
+  return {
+    isScam,
+    confidence,
+    reasonTagalog: isScam
+      ? 'Lolo at Lola, may mga nakitang palatandaan ng scam sa mensaheng ito. Maingat po tayong mag-ingat sa ganitong uri ng mensahe.'
+      : 'Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakitang mapanganib na palatandaan.',
+    actionTagalog: isScam
+      ? 'Huwag po mag-click, mag-reply, o magbigay ng personal na impormasyon. I-delete na po agad ito.'
+      : 'Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo.',
+  };
+};
 
-SPECIAL RULES FOR STANDALONE LINKS:
-- If message is ONLY a shortened URL (bit.ly, cutt.ly, etc.) → isScam: true, confidence: 0.9+
-- If message is ONLY any suspicious link → isScam: true, confidence: 0.8+
-- Standalone links are inherently suspicious and dangerous
-- No legitimate business sends only a shortened URL without context
+// ---------------------------------------------------------------------------
+// Main analysis function — 3-layer pipeline:
+//   1. Pre-screen (instant, high-recall rule engine)
+//   2. Gemini LLM (accurate, with post-processing override)
+//   3. Fallback scorer (when Gemini unavailable)
+// ---------------------------------------------------------------------------
+export const analyzeMessage = async (text: string): Promise<ScamAnalysis> => {
+  const textHash = text.split('').reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0).toString(36);
 
-LEGITIMATE MESSAGES (SAFE):
-- Official telco messages (TM, Globe, Smart) about SIM registration
-- Genuine business communications without suspicious requests
-- Normal family/friend conversations
-- Educational content without links or money requests
-- News or informational messages
+  // Layer 1: Pre-screen — catches definite scams before any API call
+  const pre = preScreenScam(text);
+  if (pre.isDefiniteScam) {
+    const result: ScamAnalysis = {
+      isScam: true,
+      confidence: pre.confidence,
+      reasonTagalog: 'Lolo at Lola, natuklasan po namin ang isang mapanganib na pattern sa mensaheng ito na karaniwang ginagamit ng mga manloloko sa Pilipinas.',
+      actionTagalog: 'Huwag po mag-click, mag-reply, o magbigay ng personal na impormasyon. I-delete na po agad ito.',
+    };
+    cacheService.storeScanResult(text, result);
+    return result;
+  }
 
-ANALYSIS RULES:
-- If message contains gaming + money + link → isScam: true, confidence: 0.9+
-- If message contains prize + link + money → isScam: true, confidence: 0.9+
-- If it matches Philippine scam patterns → isScam: true, high confidence
-- If it's clearly legitimate communication → isScam: false, high confidence
-- If uncertain → moderate confidence levels
-- Consider context: sender, content, requests made
+  // Layer 2: Cache check
+  const cached = cacheService.getScanResult(text);
+  if (cached) return cached;
 
-RESPONSE RULES:
-- Use "po" and "opo" for respect
-- ReasonTagalog: Explain WHY it's safe/dangerous based on Philippine scam patterns
-- ActionTagalog: Give specific advice (delete if scam, "okay lang po" if safe)
-- Be conversational like a caring grandchild
+  // Layer 3: Gemini LLM
+  const systemInstruction = `You are "Apo", a caring and expert Cyber-Guardian for Filipino Senior Citizens.
+Analyze messages for scam indicators with HIGH RECALL — missing a scam is far worse than a false alarm.
 
-RESPONSE FORMAT: JSON ONLY with isScam (boolean), confidence (0.0-1.0), reasonTagalog (string), actionTagalog (string)`;
+PHILIPPINE SCAM PATTERNS:
+1. Phishing: fake bank/gov SMS, OTP requests, account suspension threats, suspicious links
+2. Investment: guaranteed returns, crypto, recruit-to-earn, limited slots
+3. Prize/Raffle: advance fee to claim winnings, fake congratulations
+4. Job scams: pay activation/training fee, Telegram-only communication
+5. Romance: foreign professional, money for emergency/travel/customs
+6. Gaming: pay-to-play with prizes, suspicious links
+7. Impersonation: BSP, AMLC, NBI, PNP, bank fraud departments
+
+DECISION RULES (optimised for high Recall):
+- ANY request for OTP/MPIN/password → isScam: true
+- Shortened URL alone (bit.ly, cutt.ly, etc.) → isScam: true
+- Prize claim + link or fee → isScam: true
+- Bank/gov brand + credential request → isScam: true
+- Guaranteed investment returns → isScam: true
+- Job offer + upfront payment → isScam: true
+- When uncertain, lean toward isScam: true (false negative is more harmful)
+
+SAFE: Normal personal conversations, official telco SIM notices, legitimate delivery receipts.
+
+RESPONSE: JSON only — isScam (bool), confidence (0.0–1.0), reasonTagalog (string), actionTagalog (string).
+Use "po/opo" in Tagalog. Be concise for senior citizens.`;
 
   try {
-    // Use the full text hash for caching instead of just first 50 characters
     const result = await cacheService.cacheApiCall(
-      `gemini_analysis_${textHash}`,
+      `gemini_v2_${textHash}`,
       async () => {
         const apiKey = process.env.GEMINI_API_KEY;
-        
-        if (!apiKey) {
-          throw new Error('API key not found. Please check your environment variables.');
-        }
-        
+        if (!apiKey) throw new Error('GEMINI_API_KEY not set');
+
         const ai = new GoogleGenAI({ apiKey });
-        
         const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash", // Using current stable model name
-          contents: [{
-            parts: [{
-              text: `Please analyze this message for scam indicators: "${text}"`
-            }]
-          }],
+          model: 'gemini-2.5-flash',
+          contents: [{ parts: [{ text: `Analyze this message for scam indicators:\n\n"${text}"` }] }],
           config: {
-            temperature: 0.1, // Low temperature for consistent analysis
+            temperature: 0.05,
             topK: 1,
-            topP: 0.8,
-            maxOutputTokens: 1000,
-            responseMimeType: "application/json",
+            topP: 0.9,
+            maxOutputTokens: 512,
+            responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
               properties: {
-                isScam: { type: Type.BOOLEAN },
-                confidence: { type: Type.NUMBER },
+                isScam:        { type: Type.BOOLEAN },
+                confidence:    { type: Type.NUMBER },
                 reasonTagalog: { type: Type.STRING },
                 actionTagalog: { type: Type.STRING },
               },
-              required: ["isScam", "confidence", "reasonTagalog", "actionTagalog"],
+              required: ['isScam', 'confidence', 'reasonTagalog', 'actionTagalog'],
             },
-            systemInstruction: {
-              parts: [{ text: systemInstruction }]
-            }
-          }
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+          },
         });
-        
-        // Use the correct response structure for the new Google GenAI library
+
         const responseText = response.text;
-        
-        if (!responseText) {
-          throw new Error('Empty response from Gemini API');
-        }
-        
-        const parsedResult = JSON.parse(responseText);
-        
-        // Validate the response structure
-        if (typeof parsedResult.isScam !== 'boolean' || 
-            typeof parsedResult.confidence !== 'number' ||
-            typeof parsedResult.reasonTagalog !== 'string' ||
-            typeof parsedResult.actionTagalog !== 'string') {
-          throw new Error('Invalid response structure from Gemini API');
-        }
-        
-        // CRITICAL: Override Gemini if it's clearly wrong about gaming scams or standalone links
-        const hasGamingScamPattern = /play games.*win.*prize.*link|claim.*pesos.*play.*games|gaming.*money.*link/i.test(text);
-        const hasShortLink = /cutt\.ly|bit\.ly|t\.co|short\.link/i.test(text);
-        const isStandaloneShortLink = /^https?:\/\/(bit\.ly|cutt\.ly|t\.co|tinyurl\.com|short\.link|rb\.gy|is\.gd|v\.gd)\/[a-zA-Z0-9]+\??[a-zA-Z0-9]*$/i.test(text.trim());
-        
-        if ((hasGamingScamPattern && hasShortLink && !parsedResult.isScam) || 
-            (isStandaloneShortLink && !parsedResult.isScam)) {
+        if (!responseText) throw new Error('Empty Gemini response');
+
+        const parsed = JSON.parse(responseText);
+        if (typeof parsed.isScam !== 'boolean' || typeof parsed.confidence !== 'number')
+          throw new Error('Invalid Gemini response structure');
+
+        // Post-processing: override Gemini false negatives using pre-screen
+        const reCheck = preScreenScam(text);
+        if (reCheck.isDefiniteScam && !parsed.isScam) {
           return {
             isScam: true,
-            confidence: 0.95,
-            reasonTagalog: isStandaloneShortLink ? 
-              "Lolo at Lola, delikado po ang mga standalone na shortened links tulad nito! Walang legitimate na negosyo ang magpapadala lang ng link na walang explanation." :
-              "Lolo at Lola, ito po ay gaming scam! May suspicious link at nag-aalok ng pera para sa games. Delikado po ito.",
-            actionTagalog: "Huwag po kayong mag-click sa link at i-delete na po natin ito agad!"
+            confidence: reCheck.confidence,
+            reasonTagalog: parsed.reasonTagalog || 'Lolo at Lola, natuklasan po namin ang mapanganib na pattern sa mensaheng ito.',
+            actionTagalog: 'Huwag po mag-click, mag-reply, o magbigay ng personal na impormasyon. I-delete na po agad ito.',
           };
         }
-        
-        return parsedResult;
+
+        return parsed;
       },
-      60 * 60 * 1000 // Cache for 1 hour
+      60 * 60 * 1000
     );
 
-    // Store in scan results cache using full text
     cacheService.storeScanResult(text, result);
-    
     return result;
-    
-  } catch (error: any) {
-    console.error('Analysis failed:', error.message);
-    
-    // Try to get cached result if available, even if expired (using full text hash)
-    const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_analysis_${textHash}`);
-    if (fallbackCache) {
-      return fallbackCache;
-    }
 
-    // Enhanced Philippine-specific scam pattern detection
-    
-    // Philippine-specific scam indicators
-    const hasLink = /https?:\/\/|www\.|\.com|\.org|\.net|bit\.ly|tinyurl|cutt\.ly|t\.co|short\.link|click here|click this|i-click|pindutin|exclusive link/i.test(text);
-    const hasOTP = /otp|pin|mpin|password|passcode|verification code|verify|i-verify|mag-verify/i.test(text);
-    const hasUrgency = /urgent|asap|now|limited|expire|act fast|immediately|suspended|expire|deadline|mabilis|agad|ngayon|exclusive/i.test(text);
-    const hasPrize = /won|winner|prize|free|congratulations|nanalo|million|pesos|dollars|claim|reward|bonus|libreng|premyo|win big|play games|games/i.test(text);
-    const hasBankTerms = /bank|account|suspended|verify|confirm|update|security|balance|received.*php|new balance|gcash|maya|paymaya|bpi|bdo|metrobank/i.test(text);
-    const hasPhishing = /click|download|install|update|confirm|verify|login|sign in|mag-login|i-download|i-install/i.test(text);
-    const hasFakeTransfer = /received.*php.*from.*new balance.*claim|natanggap.*piso.*mula|bagong balance/i.test(text.toLowerCase());
-    const hasInvestment = /investment|invest|crypto|bitcoin|trading|high return|guaranteed|profit|kita|tubo|negosyo|pera/i.test(text);
-    const hasRomanceScam = /emergency|travel|hospital|accident|help me|tulong|emergency|aksidente|ospital/i.test(text);
-    const hasImpersonation = /family|emergency|urgent help|tulong|pamilya|kapatid|anak|nanay|tatay/i.test(text);
-    const hasSIMScam = /sim|registration|register|i-register|sim card|prepaid|postpaid/i.test(text);
-    const hasIllegalSales = /selling.*sim|selling.*gcash|selling.*account|verified.*account|registered.*sim/i.test(text);
-    const hasGambling = /play games|gaming|casino|slots|poker|gambling|lotto|raffle|sweepstakes|have fun playing/i.test(text);
-    
-    // CRITICAL: Detect standalone suspicious links
-    const isSuspiciousLink = /^https?:\/\/(bit\.ly|cutt\.ly|t\.co|tinyurl\.com|short\.link|rb\.gy|is\.gd|v\.gd)\/[a-zA-Z0-9]+\??[a-zA-Z0-9]*$/i.test(text.trim());
-    const isKnownScamLink = /bit\.ly\/4jSRL6w|cutt\.ly\/OtxwVxlF/i.test(text);
-    const isStandaloneLink = /^https?:\/\/[^\s]+$/.test(text.trim()) && text.trim().length < 100;
-    
-    // Check for legitimate telco patterns (these reduce scam score)
-    const isLegitTelco = /welcome.*ka-tm|globe|smart.*prepaid|sim registration.*free|tm tambayan|official.*telco/i.test(text);
-    const isLegitBusiness = /receipt|invoice|order|delivery|shipping|resibo|order number/i.test(text);
-    
-    // More sophisticated Philippine scam scoring
-    let riskScore = 0;
-    
-    // CRITICAL: Standalone suspicious links are HIGH RISK
-    if (isSuspiciousLink) riskScore += 0.8; // Very high risk for standalone URL shorteners
-    if (isKnownScamLink) riskScore += 1.0; // Maximum risk for known scam links
-    if (isStandaloneLink && hasLink) riskScore += 0.6; // High risk for any standalone link
-    
-    // High-risk indicators
-    if (hasFakeTransfer) riskScore += 0.8; // Very high risk for fake transfer messages
-    if (hasOTP && hasBankTerms) riskScore += 0.7; // Banking phishing
-    if (hasInvestment && hasUrgency) riskScore += 0.6; // Investment scams
-    if (hasLink && hasUrgency) riskScore += 0.5; // Urgent phishing
-    if (hasPrize && hasLink) riskScore += 0.5; // Prize scams
-    
-    // Medium-risk indicators
-    if (hasLink) riskScore += 0.3;
-    if (hasOTP) riskScore += 0.4;
-    if (hasUrgency) riskScore += 0.2;
-    if (hasPrize) riskScore += 0.3;
-    if (hasBankTerms) riskScore += 0.2;
-    if (hasPhishing) riskScore += 0.2;
-    if (hasRomanceScam) riskScore += 0.3;
-    if (hasImpersonation) riskScore += 0.3;
-    if (hasIllegalSales) riskScore += 0.6; // High risk for illegal account/SIM sales
-    if (hasGambling) riskScore += 0.4; // High risk for gambling/gaming scams
-    
-    // High-risk combinations (very dangerous)
-    if (hasGambling && hasLink && hasPrize) riskScore += 0.6; // Gaming scam with link and prizes
-    if (hasLink && hasPrize && hasUrgency) riskScore += 0.4; // Urgent prize claims with links
-    
-    // Reduce score for legitimate patterns
-    if (isLegitTelco) riskScore -= 0.4;
-    if (isLegitBusiness) riskScore -= 0.3;
-    if (hasSIMScam && isLegitTelco) riskScore -= 0.5; // Legitimate SIM registration
-    
-    // Ensure score stays within bounds
-    riskScore = Math.max(0, Math.min(2.0, riskScore));
-    
-    const isScam = riskScore >= 0.5;
-    const confidence = Math.min(0.95, Math.max(0.15, riskScore / 2.0));
-    
-    const result = isScam ? {
-      isScam: true,
-      confidence: confidence,
-      reasonTagalog: isSuspiciousLink || isStandaloneLink ? 
-        "Lolo at Lola, delikado po ang mga standalone na links lalo na ang mga shortened URLs! Walang legitimate na kumpanya ang magpapadala lang ng link na walang explanation o context." :
-        "Lolo at Lola, may mga nakikitang delikadong pattern po itong mensahe. Mukhang isa po ito sa mga kilalang scam sa Pilipinas tulad ng gaming scam, fake money offers, o phishing na may suspicious links.",
-      actionTagalog: "Huwag po munang mag-reply, mag-click, o magbigay ng kahit anong personal na impormasyon. I-delete na po natin ito para safe tayo."
-    } : {
-      isScam: false,
-      confidence: Math.max(0.7, 1 - confidence), // Ensure high confidence for safe messages
-      reasonTagalog: "Mukhang normal na mensahe po ito, Lolo at Lola. Walang nakikitang mga pattern ng mga kilalang scam sa Pilipinas.",
-      actionTagalog: "Safe po ito. Pwede ninyong basahin at mag-reply kung gusto ninyo."
-    };
-    
-    // Cache the fallback result too
+  } catch (error: any) {
+    console.error('Gemini analysis failed:', error.message);
+
+    // Layer 4: Fallback scorer
+    const fallbackCache = cacheService.get<ScamAnalysis>(`gemini_v2_${textHash}`);
+    if (fallbackCache) return fallbackCache;
+
+    const result = fallbackScorer(text);
     cacheService.storeScanResult(text, result);
-    
     return result;
   }
 };
