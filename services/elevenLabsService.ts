@@ -42,20 +42,13 @@ export class ElevenLabsService {
   async getVoices(): Promise<ElevenLabsVoice[]> {
     try {
       const response = await fetch(`${this.baseUrl}/voices`, {
-        headers: {
-          'xi-api-key': this.apiKey,
-        },
+        headers: { 'xi-api-key': this.apiKey },
       });
-
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
       const data = await response.json();
       return data.voices || [];
-    } catch (error) {
-      console.error('❌ Failed to fetch ElevenLabs voices:', error);
-      return FILIPINO_VOICES; // Fallback to predefined voices
+    } catch {
+      return FILIPINO_VOICES;
     }
   }
 
@@ -64,7 +57,7 @@ export class ElevenLabsService {
    */
   async generateSpeech(
     text: string, 
-    voiceId: string = FILIPINO_VOICES[1].voice_id, // Default to Bella
+    voiceId: string = FILIPINO_VOICES[1].voice_id,
     options: {
       stability?: number;
       similarity_boost?: number;
@@ -79,9 +72,6 @@ export class ElevenLabsService {
       use_speaker_boost = true
     } = options;
 
-    console.log('🎤 Generating ElevenLabs TTS for:', text.substring(0, 50) + '...');
-    console.log('🎤 Using voice ID:', voiceId);
-
     try {
       const response = await fetch(`${this.baseUrl}/text-to-speech/${voiceId}`, {
         method: 'POST',
@@ -91,14 +81,9 @@ export class ElevenLabsService {
           'xi-api-key': this.apiKey,
         },
         body: JSON.stringify({
-          text: text,
-          model_id: 'eleven_multilingual_v2', // Supports Filipino/Tagalog
-          voice_settings: {
-            stability,
-            similarity_boost,
-            style,
-            use_speaker_boost
-          }
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability, similarity_boost, style, use_speaker_boost }
         }),
       });
 
@@ -107,10 +92,8 @@ export class ElevenLabsService {
         throw new Error(`ElevenLabs TTS error: ${response.status} - ${errorText}`);
       }
 
-      console.log('✅ ElevenLabs TTS successful');
       return await response.arrayBuffer();
     } catch (error) {
-      console.error('❌ ElevenLabs TTS failed:', error);
       throw error;
     }
   }
@@ -121,18 +104,11 @@ export class ElevenLabsService {
   async getUsage(): Promise<any> {
     try {
       const response = await fetch(`${this.baseUrl}/user`, {
-        headers: {
-          'xi-api-key': this.apiKey,
-        },
+        headers: { 'xi-api-key': this.apiKey },
       });
-
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
       return await response.json();
-    } catch (error) {
-      console.error('❌ Failed to get ElevenLabs usage:', error);
+    } catch {
       return null;
     }
   }
@@ -142,33 +118,14 @@ export class ElevenLabsService {
 let elevenLabsService: ElevenLabsService | null = null;
 
 export const getElevenLabsService = (): ElevenLabsService | null => {
-  // Try multiple ways to get the API key for different environments
-  const apiKey1 = import.meta.env.VITE_ELEVENLABS_API_KEY;
-  const apiKey2 = process.env.VITE_ELEVENLABS_API_KEY;
-  const apiKey3 = process.env.ELEVENLABS_API_KEY;
-  
-  // Only show detailed debug in development
-  if (import.meta.env.DEV) {
-    console.log('🔍 ElevenLabs API Key Debug:');
-    console.log('  import.meta.env.VITE_ELEVENLABS_API_KEY:', apiKey1 ? `Present (${apiKey1.length} chars) - ${apiKey1.substring(0, 8)}...` : 'Missing/Empty');
-    console.log('  process.env.VITE_ELEVENLABS_API_KEY:', apiKey2 ? `Present (${apiKey2.length} chars) - ${apiKey2.substring(0, 8)}...` : 'Missing/Empty');
-    console.log('  process.env.ELEVENLABS_API_KEY:', apiKey3 ? `Present (${apiKey3.length} chars) - ${apiKey3.substring(0, 8)}...` : 'Missing/Empty');
-  }
-  
-  const apiKey = apiKey1 || apiKey2 || apiKey3;
-  
+  const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY ||
+                 (process.env as any).VITE_ELEVENLABS_API_KEY ||
+                 (process.env as any).ELEVENLABS_API_KEY;
+
   if (!apiKey || apiKey.trim() === '' || apiKey === 'undefined' || apiKey === 'your_elevenlabs_api_key_here') {
-    if (import.meta.env.DEV) {
-      console.warn('⚠️ ElevenLabs API key not found, empty, or is placeholder. Checked: VITE_ELEVENLABS_API_KEY, ELEVENLABS_API_KEY');
-      console.warn('⚠️ API key value:', apiKey ? `"${apiKey.substring(0, 10)}..." (${apiKey.length} chars)` : 'null/undefined');
-    }
     return null;
   }
 
-  if (import.meta.env.DEV) {
-    console.log('✅ ElevenLabs API key found, initializing service');
-  }
-  
   if (!elevenLabsService) {
     elevenLabsService = new ElevenLabsService(apiKey);
   }

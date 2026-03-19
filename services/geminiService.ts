@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScamAnalysis } from "../types";
 import { cacheService } from "./cacheService";
+import { getElevenLabsService } from "./elevenLabsService";
 
 const DB_NAME = 'GabayLigtasAudioDBV13';
 const STORE_NAME = 'audio_cache';
@@ -178,24 +179,36 @@ export const speakSystem = (text: string) => {
   }
 };
 
+const isAudioBufferCorrupted = (buf: AudioBuffer): boolean => {
+  const ch = buf.getChannelData(0);
+  const avg = ch.reduce((s, v) => s + Math.abs(v), 0) / ch.length;
+  const max = Math.max(...Array.from(ch).map(Math.abs));
+  return buf.duration < 0.5 || avg < 0.001 || max < 0.01 || ch.every(s => Math.abs(s) < 0.001);
+};
+
+const playAudioBuffer = (buf: AudioBuffer, ctx: AudioContext): void => {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  activeSources.add(src);
+  src.start(0);
+};
+
 export const playVoiceWarning = async (text: string): Promise<void> => {
   const myId = ++currentSpeechId;
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
   const cleanText = text.trim();
 
+  // --- Check memory cache ---
   if (audioCache.has(cleanText)) {
     try {
       const buf = audioCache.get(cleanText)!;
-      const ch = buf.getChannelData(0);
-      const avg = ch.reduce((s, v) => s + Math.abs(v), 0) / ch.length;
-      const max = Math.max(...Array.from(ch).map(Math.abs));
-      const corrupted = buf.duration < 0.5 || avg < 0.001 || max < 0.01 || ch.every(s => Math.abs(s) < 0.001);
-      if (corrupted) { audioCache.delete(cleanText); }
-      else {
-        const src = ctx.createBufferSource();
-        src.buffer = buf; src.connect(ctx.destination);
-        activeSources.add(src); src.start(0); return;
+      if (isAudioBufferCorrupted(buf)) {
+        audioCache.delete(cleanText);
+      } else {
+        playAudioBuffer(buf, ctx);
+        return;
       }
     } catch (error) {
       console.error('Failed to play cached audio:', error);
@@ -203,21 +216,18 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     }
   }
 
+  // --- Check IndexedDB cache ---
   const storedBytes = await getAudioFromDB(cleanText);
   if (storedBytes) {
     try {
       const buf = await decodeAudioData(storedBytes, ctx);
-      const ch = buf.getChannelData(0);
-      const avg = ch.reduce((s, v) => s + Math.abs(v), 0) / ch.length;
-      const max = Math.max(...Array.from(ch).map(Math.abs));
-      const corrupted = buf.duration < 0.5 || avg < 0.001 || max < 0.01 || ch.every(s => Math.abs(s) < 0.001);
-      if (corrupted) { await clearAudioCache(); }
-      else {
+      if (isAudioBufferCorrupted(buf)) {
+        await clearAudioCache();
+      } else {
         audioCache.set(cleanText, buf);
         if (myId !== currentSpeechId) return;
-        const src = ctx.createBufferSource();
-        src.buffer = buf; src.connect(ctx.destination);
-        activeSources.add(src); src.start(0); return;
+        playAudioBuffer(buf, ctx);
+        return;
       }
     } catch (error) {
       console.error('Failed to decode stored audio:', error);
@@ -225,6 +235,26 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
     }
   }
 
+  // --- Primary: ElevenLabs TTS ---
+  const elevenLabs = getElevenLabsService();
+  if (elevenLabs) {
+    try {
+      const arrayBuffer = await elevenLabs.generateSpeech(cleanText);
+      // Copy buffer before decoding to avoid detached ArrayBuffer errors
+      const copy = arrayBuffer.slice(0);
+      const audioBuffer = await ctx.decodeAudioData(copy);
+      if (!isAudioBufferCorrupted(audioBuffer)) {
+        audioCache.set(cleanText, audioBuffer);
+        if (myId !== currentSpeechId) return;
+        playAudioBuffer(audioBuffer, ctx);
+        return;
+      }
+    } catch (error) {
+      console.error('ElevenLabs TTS failed, falling back to browser speech:', error);
+    }
+  }
+
+  // --- Fallback: Browser speech synthesis ---
   speakSystem(cleanText);
 };
 
