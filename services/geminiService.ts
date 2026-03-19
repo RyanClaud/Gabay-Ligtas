@@ -179,6 +179,23 @@ export const speakSystem = (text: string) => {
   }
 };
 
+const ELEVENLABS_QUOTA_KEY = 'elevenlabs_quota_exceeded_until';
+
+const isElevenLabsQuotaExceeded = (): boolean => {
+  const until = localStorage.getItem(ELEVENLABS_QUOTA_KEY);
+  if (!until) return false;
+  if (Date.now() > parseInt(until, 10)) {
+    localStorage.removeItem(ELEVENLABS_QUOTA_KEY);
+    return false;
+  }
+  return true;
+};
+
+const markElevenLabsQuotaExceeded = (): void => {
+  // Cache quota exceeded state for 24 hours — stops hammering the API
+  localStorage.setItem(ELEVENLABS_QUOTA_KEY, (Date.now() + 24 * 60 * 60 * 1000).toString());
+};
+
 const isAudioBufferCorrupted = (buf: AudioBuffer): boolean => {
   const ch = buf.getChannelData(0);
   const avg = ch.reduce((s, v) => s + Math.abs(v), 0) / ch.length;
@@ -237,7 +254,7 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
 
   // --- Primary: ElevenLabs TTS ---
   const elevenLabs = getElevenLabsService();
-  if (elevenLabs) {
+  if (elevenLabs && !isElevenLabsQuotaExceeded()) {
     try {
       const arrayBuffer = await elevenLabs.generateSpeech(cleanText);
       // Copy buffer before decoding to avoid detached ArrayBuffer errors
@@ -249,7 +266,11 @@ export const playVoiceWarning = async (text: string): Promise<void> => {
         playAudioBuffer(audioBuffer, ctx);
         return;
       }
-    } catch (error) {
+    } catch (error: any) {
+      // If quota exceeded, cache that state so we stop retrying for 24 hours
+      if (error?.message?.includes('quota_exceeded') || error?.message?.includes('401')) {
+        markElevenLabsQuotaExceeded();
+      }
       console.error('ElevenLabs TTS failed, falling back to browser speech:', error);
     }
   }
